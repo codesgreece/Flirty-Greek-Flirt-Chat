@@ -17,7 +17,7 @@ all first-party — no BaaS, no hosted auth, no Firebase/Supabase/Clerk.
 
 ## Vercel
 
-Production tracks `main`. Set these environment variables in the Vercel project:
+Production tracks **`master`** (also mirrored to `main`). Set these environment variables in the Vercel project:
 
 - `DATABASE_URL` — PostgreSQL connection string
 - `SESSION_SECRET` — 32+ character secret

@@ -14,11 +14,14 @@ export default async function HomePage() {
   } catch {
     session = null;
   }
-  const ua = (await headers()).get("user-agent") ?? "";
+  const headerList = await headers();
+  const ua = headerList.get("user-agent") ?? "";
+  const fetchDest = headerList.get("sec-fetch-dest") ?? "";
+  const isEmbeddedPreview = fetchDest === "iframe" || fetchDest === "embed";
   if (session) {
     if (!session.user.profile?.onboardingCompletedAt) redirect("/onboarding");
     redirect("/app/discover");
   }
-  if (isMobile(ua)) redirect("/welcome");
+  if (isMobile(ua) && !isEmbeddedPreview) redirect("/welcome");
   return <LandingPage />;
 }

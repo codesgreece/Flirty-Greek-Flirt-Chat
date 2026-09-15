@@ -9,8 +9,17 @@ const plusJakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+function publicSiteUrl() {
+  if (process.env.APP_URL) return process.env.APP_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(publicSiteUrl()),
   title: {
     default: "FLIRTY — Meet. Flirt. Belong.",
     template: "%s · FLIRTY",
