@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FlirtyWordmark } from "@/components/brand/FlirtyLogo";
@@ -10,7 +10,6 @@ import { useApp } from "@/components/providers/AppProviders";
 
 function AuthForm() {
   const params = useSearchParams();
-  const router = useRouter();
   const { refresh, toast } = useApp();
   const [mode, setMode] = useState(params.get("mode") === "login" ? "login" : "register");
   const [email, setEmail] = useState("");
@@ -30,10 +29,14 @@ function AuthForm() {
           body: JSON.stringify({ email, password }),
         },
       );
-      await refresh();
+      const next = result.isAdmin ? "/admin" : result.onboardingComplete ? "/app/discover" : "/onboarding";
+      try {
+        await refresh();
+      } catch {
+        /* still enter the app after a successful login */
+      }
       toast(mode === "login" ? "Welcome back" : "Account created");
-      if (result.isAdmin) router.push("/admin");
-      else router.push(result.onboardingComplete ? "/app/discover" : "/onboarding");
+      window.location.assign(next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not continue.");
     } finally {
@@ -79,7 +82,7 @@ function AuthForm() {
               />
             </label>
             {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-            <FlirtyButton className="w-full" loading={loading} disabled={loading}>
+            <FlirtyButton type="submit" className="w-full" loading={loading} disabled={loading}>
               {mode === "login" ? "Log in" : "Create account"}
             </FlirtyButton>
           </form>

@@ -1,4 +1,4 @@
-const CACHE = "flirty-shell-v1";
+const CACHE = "flirty-shell-v2";
 const SHELL = ["/", "/welcome", "/logo/favicon.svg"];
 
 self.addEventListener("install", (event) => {

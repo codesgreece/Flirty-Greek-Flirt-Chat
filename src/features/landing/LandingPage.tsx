@@ -48,10 +48,10 @@ export function LandingPage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/auth?mode=register">
-              <FlirtyButton>Create account</FlirtyButton>
+              <FlirtyButton type="button">Create account</FlirtyButton>
             </Link>
             <Link href="/auth?mode=login">
-              <FlirtyButton variant="ghost">Log in</FlirtyButton>
+              <FlirtyButton type="button" variant="ghost">Log in</FlirtyButton>
             </Link>
           </div>
           <StoreBadges className="mt-8" />

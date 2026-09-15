@@ -19,7 +19,7 @@ export function FlirtyButton({
   loading,
   className,
   children,
-  type = "button",
+  type = "submit",
   disabled,
   onClick,
 }: Props) {

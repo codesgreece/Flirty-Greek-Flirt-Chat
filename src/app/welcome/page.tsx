@@ -23,10 +23,10 @@ export default function WelcomePage() {
       </motion.div>
       <div className="flex w-full max-w-sm flex-col gap-3">
         <Link href="/auth?mode=register">
-          <FlirtyButton className="w-full">Create account</FlirtyButton>
+          <FlirtyButton type="button" className="w-full">Create account</FlirtyButton>
         </Link>
         <Link href="/auth?mode=login">
-          <FlirtyButton variant="ghost" className="w-full">
+          <FlirtyButton type="button" variant="ghost" className="w-full">
             Log in
           </FlirtyButton>
         </Link>
