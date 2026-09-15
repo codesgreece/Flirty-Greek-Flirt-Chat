@@ -8,7 +8,12 @@ function isMobile(ua: string) {
 }
 
 export default async function HomePage() {
-  const session = await readSession();
+  let session = null;
+  try {
+    session = await readSession();
+  } catch {
+    session = null;
+  }
   const ua = (await headers()).get("user-agent") ?? "";
   if (session) {
     if (!session.user.profile?.onboardingCompletedAt) redirect("/onboarding");

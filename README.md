@@ -15,7 +15,17 @@ all first-party — no BaaS, no hosted auth, no Firebase/Supabase/Clerk.
 - Argon2id sessions in HTTP-only cookies
 - Local/MinIO media storage
 
-## Quick start
+## Vercel
+
+Production tracks `main`. Set these environment variables in the Vercel project:
+
+- `DATABASE_URL` — PostgreSQL connection string
+- `SESSION_SECRET` — 32+ character secret
+- `APP_URL` — `https://your-domain.vercel.app`
+- `REDIS_URL` — optional; in-memory limits are used if Redis is unreachable
+
+The public landing page still renders if the database is not configured yet. Login, Discover and chat need `DATABASE_URL`.
+
 
 ```bash
 cp .env.example .env

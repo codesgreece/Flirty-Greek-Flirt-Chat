@@ -33,24 +33,29 @@ export async function rotateSession(currentHash: string, userId: string, meta: {
 }
 
 export async function readSession() {
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const session = await prisma.deviceSession.findUnique({
-    where: { tokenHash: sha256(token) },
-    include: { user: { include: { profile: true, adminProfile: true, subscription: { include: { plan: true } } } } },
-  });
-  if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
-  if (session.user.status !== "ACTIVE") return null;
-  await prisma.deviceSession.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() },
-  });
-  await prisma.user.update({
-    where: { id: session.userId },
-    data: { lastActiveAt: new Date() },
-  });
-  return session;
+  if (!process.env.DATABASE_URL) return null;
+  try {
+    const jar = await cookies();
+    const token = jar.get(SESSION_COOKIE)?.value;
+    if (!token) return null;
+    const session = await prisma.deviceSession.findUnique({
+      where: { tokenHash: sha256(token) },
+      include: { user: { include: { profile: true, adminProfile: true, subscription: { include: { plan: true } } } } },
+    });
+    if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
+    if (session.user.status !== "ACTIVE") return null;
+    await prisma.deviceSession.update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date() },
+    });
+    await prisma.user.update({
+      where: { id: session.userId },
+      data: { lastActiveAt: new Date() },
+    });
+    return session;
+  } catch {
+    return null;
+  }
 }
 
 export async function requireUser() {
