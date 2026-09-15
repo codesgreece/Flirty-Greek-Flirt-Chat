@@ -1,4 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveDatabaseUrl } from "@/lib/database-url";
+
+resolveDatabaseUrl();
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
@@ -13,7 +16,7 @@ function createPrisma() {
 }
 
 export function databaseConfigured() {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(resolveDatabaseUrl());
 }
 
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {

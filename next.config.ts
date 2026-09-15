@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  serverExternalPackages: ["@node-rs/argon2", "@prisma/client", "sharp", "ioredis"],
   images: {
     localPatterns: [
       { pathname: "/avatars/**" },

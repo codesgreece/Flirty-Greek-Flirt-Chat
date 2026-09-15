@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { prisma } from "@/server/db";
+import { prisma, databaseConfigured } from "@/server/db";
 import { getEnv } from "@/lib/env";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { AppError } from "@/server/errors";
@@ -33,7 +33,7 @@ export async function rotateSession(currentHash: string, userId: string, meta: {
 }
 
 export async function readSession() {
-  if (!process.env.DATABASE_URL) return null;
+  if (!databaseConfigured()) return null;
   try {
     const jar = await cookies();
     const token = jar.get(SESSION_COOKIE)?.value;

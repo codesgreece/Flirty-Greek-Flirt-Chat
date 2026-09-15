@@ -23,13 +23,17 @@ function AuthForm() {
     setLoading(true);
     setError("");
     try {
-      const result = await api<{ onboardingComplete?: boolean }>("/api/auth?action=" + (mode === "login" ? "login" : "register"), {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
+      const result = await api<{ onboardingComplete?: boolean; isAdmin?: boolean }>(
+        "/api/auth?action=" + (mode === "login" ? "login" : "register"),
+        {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        },
+      );
       await refresh();
       toast(mode === "login" ? "Welcome back" : "Account created");
-      router.push(result.onboardingComplete ? "/app/discover" : "/onboarding");
+      if (result.isAdmin) router.push("/admin");
+      else router.push(result.onboardingComplete ? "/app/discover" : "/onboarding");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not continue.");
     } finally {

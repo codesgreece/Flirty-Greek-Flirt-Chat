@@ -64,14 +64,17 @@ async function portrait(file: string, name: string, c1: string, c2: string) {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === "production") {
-    console.log("Refusing to seed production.");
+  const existingUsers = await prisma.user.count();
+  if (process.env.NODE_ENV === "production" && existingUsers > 0 && process.env.FLIRTY_BOOTSTRAP !== "1") {
+    console.log("Production database already has users; skipping seed.");
     return;
   }
   const passwordHash = await hash(PASSWORD, { memoryCost: 19456, timeCost: 2, algorithm: 2 });
   const adminHash = await hash(ADMIN_PASSWORD, { memoryCost: 19456, timeCost: 2, algorithm: 2 });
   const uploadRoot = path.resolve("./data/uploads/photos");
+  const publicUploadRoot = path.resolve("./public/uploads/photos");
   await mkdir(uploadRoot, { recursive: true });
+  await mkdir(publicUploadRoot, { recursive: true });
   await mkdir(path.resolve("./public/avatars"), { recursive: true });
   await mkdir(path.resolve("./public/icons"), { recursive: true });
 
@@ -116,6 +119,11 @@ async function main() {
     await sharp(path.join(uploadRoot, `${key}-lg.webp`)).resize(720, 920).toFile(path.join(uploadRoot, `${key}-md.webp`));
     await sharp(path.join(uploadRoot, `${key}-lg.webp`)).resize(240, 300).toFile(path.join(uploadRoot, `${key}-th.webp`));
     await sharp(path.join(uploadRoot, `${key}-lg.webp`)).jpeg().toFile(`public/avatars/${key}.jpg`);
+    await Promise.all(
+      [`${key}-lg.webp`, `${key}-md.webp`, `${key}-th.webp`].map((file) =>
+        sharp(path.join(uploadRoot, file)).toFile(path.join(publicUploadRoot, file)),
+      ),
+    );
 
     const user = await prisma.user.upsert({
       where: { emailNormalized: person.email },

@@ -42,8 +42,15 @@ export async function POST(req: NextRequest) {
     body,
     handler: async ({ data }) => {
       const result = await loginUser(loginSchema.parse(data), meta);
-      const profile = await prisma.profile.findUnique({ where: { userId: result.userId } });
-      return { ...result, onboardingComplete: Boolean(profile?.onboardingCompletedAt) };
+      const user = await prisma.user.findUnique({
+        where: { id: result.userId },
+        include: { profile: true, adminProfile: true },
+      });
+      return {
+        ...result,
+        onboardingComplete: Boolean(user?.profile?.onboardingCompletedAt),
+        isAdmin: Boolean(user?.adminProfile) || user?.role === "ADMIN",
+      };
     },
   });
 }

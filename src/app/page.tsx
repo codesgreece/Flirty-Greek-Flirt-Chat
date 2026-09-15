@@ -19,6 +19,8 @@ export default async function HomePage() {
   const fetchDest = headerList.get("sec-fetch-dest") ?? "";
   const isEmbeddedPreview = fetchDest === "iframe" || fetchDest === "embed";
   if (session) {
+    const isAdmin = Boolean(session.user.adminProfile) || session.user.role === "ADMIN";
+    if (isAdmin && !session.user.profile?.onboardingCompletedAt) redirect("/admin");
     if (!session.user.profile?.onboardingCompletedAt) redirect("/onboarding");
     redirect("/app/discover");
   }

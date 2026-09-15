@@ -10,6 +10,7 @@ const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export function storageRoot() {
+  if (process.env.VERCEL) return "/tmp/flirty-uploads";
   return path.resolve(getEnv().STORAGE_LOCAL_PATH);
 }
 
@@ -51,7 +52,11 @@ export async function saveProfilePhoto(profileId: string, file: File) {
 export async function readStoredFile(key: string) {
   if (key.includes("..") || key.startsWith("/")) throw new AppError("INVALID", "Invalid media path.", 400);
   const full = path.join(storageRoot(), key);
-  return readFile(full);
+  try {
+    return await readFile(full);
+  } catch {
+    return readFile(path.join(process.cwd(), "public", "uploads", key));
+  }
 }
 
 export async function writePublicAvatarPng(fileName: string, png: Buffer) {

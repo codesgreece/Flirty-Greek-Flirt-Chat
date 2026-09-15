@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prisma } from "@/server/db";
+import { prisma, databaseConfigured } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
 import { createSession, setSessionCookie, clearSessionCookie } from "@/server/auth/session";
@@ -38,6 +38,9 @@ async function ensureFreePlan(userId: string) {
 }
 
 export async function registerUser(input: z.infer<typeof registerSchema>, meta: { ip: string; userAgent: string }) {
+  if (!databaseConfigured()) {
+    throw new AppError("DATABASE", "FLIRTY could not reach its database. Try again in a moment.", 503);
+  }
   await rateLimit("register", meta.ip);
   const email = normalizeEmail(input.email);
   const existing = await prisma.user.findUnique({ where: { emailNormalized: email } });
@@ -60,6 +63,9 @@ export async function registerUser(input: z.infer<typeof registerSchema>, meta: 
 }
 
 export async function loginUser(input: z.infer<typeof loginSchema>, meta: { ip: string; userAgent: string }) {
+  if (!databaseConfigured()) {
+    throw new AppError("DATABASE", "FLIRTY could not reach its database. Try again in a moment.", 503);
+  }
   await rateLimit("login", meta.ip);
   const email = normalizeEmail(input.email);
   const user = await prisma.user.findUnique({ where: { emailNormalized: email } });

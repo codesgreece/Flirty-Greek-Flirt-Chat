@@ -17,14 +17,14 @@ all first-party — no BaaS, no hosted auth, no Firebase/Supabase/Clerk.
 
 ## Vercel
 
-Production tracks **`master`** (also mirrored to `main`). Set these environment variables in the Vercel project:
+Production tracks **`master`** (also mirrored to `main`). If `DATABASE_URL` is not set, the Vercel build provisions Prisma Postgres and seeds demo accounts. Set these environment variables for a permanent database:
 
-- `DATABASE_URL` — PostgreSQL connection string
+- `DATABASE_URL` — PostgreSQL connection string (or Vercel `POSTGRES_URL`)
 - `SESSION_SECRET` — 32+ character secret
 - `APP_URL` — `https://your-domain.vercel.app`
 - `REDIS_URL` — optional; in-memory limits are used if Redis is unreachable
 
-The public landing page still renders if the database is not configured yet. Login, Discover and chat need `DATABASE_URL`.
+Demo login after a bootstrap deploy: `admin@flirty.local` / `FlirtyAdmin!234` and `elena@flirty.local` / `FlirtyDev!234`. Claim the Prisma database from the Vercel build logs if you want it to survive 24 hours.
 
 
 ```bash
