@@ -1,0 +1,784 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  PENDING_DELETION
+  DELETED
+}
+
+enum UserRole {
+  MEMBER
+  ADMIN
+}
+
+enum Gender {
+  WOMAN
+  MAN
+  NONBINARY
+  OTHER
+}
+
+enum DatingIntention {
+  CASUAL
+  DATING
+  RELATIONSHIP
+  MARRIAGE
+  FIGURING_IT_OUT
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PlanCode {
+  FREE
+  PLUS
+  GOLD
+  PLATINUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  TRIALING
+}
+
+enum InteractionKind {
+  LIKE
+  FLIRT
+  SUPER_LIKE
+  PASS
+}
+
+enum MessageKind {
+  TEXT
+  DIRECT_MESSAGE
+  SYSTEM
+}
+
+enum ReportCategory {
+  FAKE_PROFILE
+  HARASSMENT
+  SPAM
+  SCAM
+  INAPPROPRIATE
+  THREATS
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  ACTIONED
+  DISMISSED
+}
+
+enum ModerationState {
+  UPLOADED
+  PROCESSING
+  APPROVED
+  REJECTED
+  MANUAL_REVIEW
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  MODERATOR
+  SUPPORT
+  ANALYST
+}
+
+enum NotificationKind {
+  LIKE
+  FLIRT
+  SUPER_LIKE
+  DIRECT_MESSAGE
+  MATCH
+  MESSAGE
+  PROFILE_VIEW
+  VERIFICATION
+  SUBSCRIPTION
+  SAFETY
+}
+
+enum VibeCode {
+  CHILL
+  ROMANTIC
+  ADVENTUROUS
+  FUNNY
+  SOCIAL
+  DEEP
+  CREATIVE
+  AMBITIOUS
+  SPONTANEOUS
+}
+
+enum BoostStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+model User {
+  id                 String        @id @default(uuid()) @db.Uuid
+  email              String        @unique
+  emailNormalized    String        @unique
+  passwordHash       String
+  role               UserRole      @default(MEMBER)
+  status             AccountStatus @default(ACTIVE)
+  emailVerifiedAt    DateTime?
+  lastActiveAt       DateTime      @default(now())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
+  deletionRequestedAt DateTime?
+
+  profile            Profile?
+  sessions           DeviceSession[]
+  loginAttempts      LoginAttempt[]
+  interests          UserInterest[]
+  vibes              UserVibe[]
+  preference         DatingPreference?
+  compatibility      CompatibilityProfile?
+  outgoingScores     CompatibilityScore[] @relation("ScoreViewer")
+  incomingScores     CompatibilityScore[] @relation("ScoreSubject")
+  outgoingActions    Interaction[]        @relation("Actor")
+  incomingActions    Interaction[]        @relation("Target")
+  matchesAsLow       Match[]              @relation("MatchLow")
+  matchesAsHigh      Match[]              @relation("MatchHigh")
+  conversationsA     Conversation[]       @relation("ConversationA")
+  conversationsB     Conversation[]       @relation("ConversationB")
+  messages           Message[]
+  reactions          MessageReaction[]
+  directMessagesSent DirectMessage[]      @relation("DmSender")
+  directMessagesRecv DirectMessage[]      @relation("DmRecipient")
+  subscription       Subscription?
+  usageCounters      UsageCounter[]
+  boosts             Boost[]
+  passport           Passport?
+  blocksMade         Block[]              @relation("Blocker")
+  blocksReceived     Block[]              @relation("Blocked")
+  reportsMade        Report[]             @relation("Reporter")
+  reportsReceived    Report[]             @relation("Reported")
+  verifications      Verification[]
+  notifications      Notification[]
+  notificationPrefs  NotificationPreference?
+  privacy            PrivacySettings?
+  auditLogs          AuditLog[]
+  moderationCases    ModerationCase[]     @relation("ModerationSubject")
+  adminProfile       AdminUser?
+  events             AnalyticsEvent[]
+  idempotencyKeys    IdempotencyKey[]
+  consent            ConsentRecord[]
+  dataExports        DataExport[]
+
+  @@index([status, lastActiveAt])
+  @@index([createdAt])
+}
+
+model Profile {
+  id                    String             @id @default(uuid()) @db.Uuid
+  userId                String             @unique @db.Uuid
+  displayName           String
+  dateOfBirth           DateTime
+  gender                Gender
+  seeking               Gender[]
+  bio                   String             @default("")
+  city                  String             @default("")
+  country               String             @default("")
+  region                String             @default("")
+  latitude              Float?
+  longitude             Float?
+  datingIntention       DatingIntention    @default(DATING)
+  jobTitle              String             @default("")
+  education             String             @default("")
+  heightCm              Int?
+  languages             String[]           @default([])
+  lifestyle             Json               @default("{}")
+  prompts               Json               @default("[]")
+  onboardingStep        Int                @default(0)
+  onboardingCompletedAt DateTime?
+  verificationStatus    VerificationStatus @default(UNVERIFIED)
+  qualityScore          Float              @default(40)
+  discoverable          Boolean            @default(true)
+  incognito             Boolean            @default(false)
+  showDistance          Boolean            @default(true)
+  showOnline            Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos ProfilePhoto[]
+
+  @@index([city, discoverable])
+  @@index([verificationStatus])
+  @@index([incognito, discoverable])
+}
+
+model ProfilePhoto {
+  id            String          @id @default(uuid()) @db.Uuid
+  profileId     String          @db.Uuid
+  storageKey    String
+  thumbKey      String
+  mediumKey     String
+  mimeType      String
+  byteSize      Int
+  sortOrder     Int             @default(0)
+  isPrimary     Boolean         @default(false)
+  status        ModerationState @default(UPLOADED)
+  width         Int?
+  height        Int?
+  createdAt     DateTime        @default(now())
+  reviewedAt    DateTime?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, sortOrder])
+  @@index([status])
+}
+
+model Interest {
+  id    String         @id @default(uuid()) @db.Uuid
+  slug  String         @unique
+  label String
+  users UserInterest[]
+}
+
+model UserInterest {
+  userId     String @db.Uuid
+  interestId String @db.Uuid
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@id([userId, interestId])
+}
+
+model Vibe {
+  id    String     @id @default(uuid()) @db.Uuid
+  code  VibeCode   @unique
+  label String
+  users UserVibe[]
+}
+
+model UserVibe {
+  userId    String @db.Uuid
+  vibeId    String @db.Uuid
+  intensity Int    @default(70)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vibe Vibe @relation(fields: [vibeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, vibeId])
+}
+
+model DatingPreference {
+  id              String  @id @default(uuid()) @db.Uuid
+  userId          String  @unique @db.Uuid
+  minAge          Int     @default(18)
+  maxAge          Int     @default(45)
+  maxDistanceKm   Int     @default(50)
+  genders         Gender[]
+  intentions      DatingIntention[]
+  verifiedOnly    Boolean @default(false)
+  hasPhotosOnly   Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CompatibilityProfile {
+  id                     String @id @default(uuid()) @db.Uuid
+  userId                 String @unique @db.Uuid
+  answers                Json   @default("{}")
+  communicationStyle     String @default("")
+  activityLevel          String @default("")
+  lifestylePace          String @default("")
+  relationshipPace       String @default("")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CompatibilityScore {
+  id            String   @id @default(uuid()) @db.Uuid
+  viewerId      String   @db.Uuid
+  subjectId     String   @db.Uuid
+  score         Int
+  interests     Int
+  vibe          Int
+  intent        Int
+  lifestyle     Int
+  distance      Int
+  personality   Int
+  computedAt    DateTime @default(now())
+
+  viewer  User @relation("ScoreViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  subject User @relation("ScoreSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, subjectId])
+  @@index([viewerId, score])
+}
+
+model Interaction {
+  id             String          @id @default(uuid()) @db.Uuid
+  actorId        String          @db.Uuid
+  targetId       String          @db.Uuid
+  kind           InteractionKind
+  active         Boolean         @default(true)
+  rewindable     Boolean         @default(true)
+  idempotencyKey String?
+  createdAt      DateTime        @default(now())
+  undoneAt       DateTime?
+
+  actor  User @relation("Actor", fields: [actorId], references: [id], onDelete: Cascade)
+  target User @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([actorId, targetId, kind, active])
+  @@index([targetId, kind, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model DirectMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  senderId       String   @db.Uuid
+  recipientId    String   @db.Uuid
+  body           String
+  withSuperLike  Boolean  @default(false)
+  status         String   @default("SENT")
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+  readAt         DateTime?
+
+  sender    User @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, createdAt])
+}
+
+model Match {
+  id         String    @id @default(uuid()) @db.Uuid
+  lowUserId  String    @db.Uuid
+  highUserId String    @db.Uuid
+  origin     String    @default("FLIRT")
+  active     Boolean   @default(true)
+  unmatchedAt DateTime?
+  unmatchedBy String?  @db.Uuid
+  createdAt  DateTime  @default(now())
+
+  lowUser  User          @relation("MatchLow", fields: [lowUserId], references: [id], onDelete: Cascade)
+  highUser User          @relation("MatchHigh", fields: [highUserId], references: [id], onDelete: Cascade)
+  conversation Conversation?
+
+  @@unique([lowUserId, highUserId, active])
+  @@index([createdAt])
+}
+
+model Conversation {
+  id         String    @id @default(uuid()) @db.Uuid
+  matchId    String    @unique @db.Uuid
+  userAId    String    @db.Uuid
+  userBId    String    @db.Uuid
+  mutedByA   Boolean   @default(false)
+  mutedByB   Boolean   @default(false)
+  lastMessageAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
+
+  match    Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userA    User      @relation("ConversationA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User      @relation("ConversationB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userAId, lastMessageAt])
+  @@index([userBId, lastMessageAt])
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  conversationId String      @db.Uuid
+  senderId       String      @db.Uuid
+  kind           MessageKind @default(TEXT)
+  body           String
+  clientId       String?
+  createdAt      DateTime    @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  readAt         DateTime?
+
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  reactions    MessageReaction[]
+
+  @@unique([conversationId, clientId])
+  @@index([conversationId, createdAt])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        PlanCode @unique
+  name        String
+  priceCents  Int
+  currency    String   @default("EUR")
+  interval    String   @default("month")
+  description String
+  highlighted Boolean  @default(false)
+  active      Boolean  @default(true)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @unique @db.Uuid
+  planId             String             @db.Uuid
+  status             SubscriptionStatus @default(ACTIVE)
+  startedAt          DateTime           @default(now())
+  expiresAt          DateTime
+  renews             Boolean            @default(true)
+  provider           String             @default("development")
+  providerRef        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan    SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  ledger  BillingLedger[]
+
+  @@index([status, expiresAt])
+}
+
+model BillingLedger {
+  id             String   @id @default(uuid()) @db.Uuid
+  subscriptionId String   @db.Uuid
+  amountCents    Int
+  currency       String   @default("EUR")
+  kind           String
+  note           String   @default("")
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+model UserEntitlement {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  capability String
+  enabled   Boolean  @default(true)
+  source    String   @default("PLAN")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, capability])
+}
+
+model UsageCounter {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  key       String
+  periodKey String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key, periodKey])
+}
+
+model Boost {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String      @db.Uuid
+  status     BoostStatus @default(ACTIVE)
+  startedAt  DateTime    @default(now())
+  expiresAt  DateTime
+  idempotencyKey String? @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, expiresAt])
+}
+
+model Passport {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @unique @db.Uuid
+  city        String
+  country     String
+  latitude    Float
+  longitude   Float
+  active      Boolean   @default(true)
+  expiresAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Block {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+model Report {
+  id          String         @id @default(uuid()) @db.Uuid
+  reporterId  String         @db.Uuid
+  reportedId  String         @db.Uuid
+  category    ReportCategory
+  details     String         @default("")
+  messageId   String?
+  status      ReportStatus   @default(OPEN)
+  createdAt   DateTime       @default(now())
+  resolvedAt  DateTime?
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model Verification {
+  id         String             @id @default(uuid()) @db.Uuid
+  userId     String             @db.Uuid
+  status     VerificationStatus @default(PENDING)
+  selfieKey  String?
+  note       String             @default("")
+  createdAt  DateTime           @default(now())
+  reviewedAt DateTime?
+  reviewerId String?            @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  kind      NotificationKind
+  title     String
+  body      String
+  payload   Json             @default("{}")
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  id             String  @id @default(uuid()) @db.Uuid
+  userId         String  @unique @db.Uuid
+  likes          Boolean @default(true)
+  flirts         Boolean @default(true)
+  matches        Boolean @default(true)
+  messages       Boolean @default(true)
+  marketing      Boolean @default(false)
+  emailEnabled   Boolean @default(true)
+  pushEnabled    Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PrivacySettings {
+  id                 String  @id @default(uuid()) @db.Uuid
+  userId             String  @unique @db.Uuid
+  profileVisibility  String  @default("DISCOVERABLE")
+  showDistance       Boolean @default(true)
+  showOnline         Boolean @default(true)
+  discoveryVisible   Boolean @default(true)
+  messagePermissions String  @default("MATCHES")
+  cookieAnalytics    Boolean @default(false)
+  cookieMarketing    Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DeviceSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  tokenHash     String    @unique
+  userAgent     String    @default("")
+  ipHash        String    @default("")
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  rotatedFromId String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  email     String
+  success   Boolean
+  ipHash    String
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  actorId   String?  @db.Uuid
+  action    String
+  metadata  Json     @default("{}")
+  ipHash    String   @default("")
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ModerationCase {
+  id          String          @id @default(uuid()) @db.Uuid
+  subjectId   String          @db.Uuid
+  kind        String
+  state       ModerationState @default(MANUAL_REVIEW)
+  reason      String          @default("")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  subject User               @relation("ModerationSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  actions ModerationAction[]
+
+  @@index([state, createdAt])
+}
+
+model ModerationAction {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @db.Uuid
+  adminId   String?  @db.Uuid
+  action    String
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  case  ModerationCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  admin AdminUser?     @relation(fields: [adminId], references: [id], onDelete: SetNull)
+}
+
+model AdminUser {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @unique @db.Uuid
+  role      AdminRole @default(MODERATOR)
+  createdAt DateTime  @default(now())
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actions ModerationAction[]
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  enabled   Boolean  @default(false)
+  note      String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
+model SystemSetting {
+  id    String @id @default(uuid()) @db.Uuid
+  key   String @unique
+  value Json
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  name      String
+  props     Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+}
+
+model IdempotencyKey {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  key       String
+  route     String
+  response  Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, route, key])
+  @@index([createdAt])
+}
+
+model ConsentRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  kind      String
+  granted   Boolean
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DataExport {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  status     String    @default("PENDING")
+  storageKey String?
+  createdAt  DateTime  @default(now())
+  completedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HiddenProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  hiddenId  String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@unique([userId, hiddenId])
+}
+
+model RateLimitOverride {
+  id        String @id @default(uuid()) @db.Uuid
+  key       String @unique
+  limit     Int
+  windowSec Int
+}

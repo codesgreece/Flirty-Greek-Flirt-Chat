@@ -1,0 +1,17 @@
+node_modules
+.next
+dist
+coverage
+.env
+.env.local
+.env.*.local
+data/uploads
+*.log
+.DS_Store
+prisma/*.db
+prisma/*.db-journal
+tsconfig.tsbuildinfo
+.vercel
+.turbo
+playwright-report
+test-results
