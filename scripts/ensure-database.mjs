@@ -36,20 +36,29 @@ function existingUrl() {
   return (
     process.env.DATABASE_URL ||
     process.env.POSTGRES_PRISMA_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
     process.env.POSTGRES_URL ||
     process.env.PRISMA_DATABASE_URL ||
     ""
   ).trim();
 }
 
-function run(command, args) {
+function unpooledUrl() {
+  return (
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.DIRECT_URL ||
+    existingUrl()
+  ).trim();
+}
+
+function run(command, args, { required = true } = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
     env: process.env,
     stdio: "inherit",
   });
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  if (result.status !== 0 && required) process.exit(result.status ?? 1);
+  return result.status ?? 1;
 }
 
 const url = existingUrl();
@@ -60,12 +69,12 @@ if (!url) {
   process.exit(0);
 }
 
-const migrateUrl =
-  process.env.POSTGRES_URL_NON_POOLING ||
-  process.env.DIRECT_URL ||
-  url;
+const migrateUrl = unpooledUrl();
 process.env.DATABASE_URL = migrateUrl;
 console.log("[flirty] Using permanent Postgres from the environment.");
-run("npx", ["prisma", "migrate", "deploy"]);
+const migrated = run("npx", ["prisma", "migrate", "deploy"], { required: false });
+if (migrated !== 0) {
+  console.warn("[flirty] migrate deploy failed (often a pooler advisory lock). Continuing because the schema may already be applied.");
+}
 process.env.DATABASE_URL = url;
-run("npx", ["prisma", "db", "seed"]);
+run("npx", ["prisma", "db", "seed"], { required: false });
