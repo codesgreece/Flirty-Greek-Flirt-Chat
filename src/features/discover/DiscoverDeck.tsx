@@ -108,7 +108,10 @@ export function DiscoverDeck() {
 
   useEffect(() => {
     setLoading(true);
-    load().catch(() => setLoading(false));
+    load().catch(() => {
+      setEmpty({ message: "Back in 3 hours", hours: 3 });
+      setLoading(false);
+    });
   }, [load]);
 
   async function saveFilters() {
@@ -448,8 +451,8 @@ function ProfileSwipeCard({
     >
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${photo.src})` }} />
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-      <div className="absolute inset-x-0 top-0 z-10 flex h-24">
-        <button type="button" className="flex-1" aria-label="Previous photo" onClick={() => setPhotoIndex((i) => Math.max(0, i - 1))} />
+      <div className="absolute inset-x-0 top-0 bottom-40 z-10 flex">
+        <button type="button" className="w-[32%]" aria-label="Previous photo" onClick={() => setPhotoIndex((i) => Math.max(0, i - 1))} />
         <button type="button" className="flex-1" aria-label="Next photo" onClick={() => setPhotoIndex((i) => Math.min(photos.length - 1, i + 1))} />
       </div>
       <div className="absolute inset-x-3 top-3 z-10 flex gap-1">
@@ -463,7 +466,7 @@ function ProfileSwipeCard({
       <motion.div style={{ opacity: passOp }} className="pointer-events-none absolute right-5 top-8 rounded-full border-2 border-white/50 px-3 py-1 text-sm font-bold">
         PASS
       </motion.div>
-      <div className="absolute inset-x-0 bottom-0 p-5">
+      <div className="absolute inset-x-0 bottom-0 z-20 p-5">
         {card.secondChance ? <p className="mb-2 text-xs font-semibold text-amber-200">Second chance</p> : null}
         <button type="button" className="text-xs font-semibold tracking-wide text-flirty-pink" onClick={() => setShowWhy((v) => !v)}>
           {card.compatibility.score}% overall

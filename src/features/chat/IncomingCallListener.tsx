@@ -27,7 +27,7 @@ export function IncomingCallListener() {
       }
     }
     void tick();
-    const t = setInterval(tick, 4000);
+    const t = setInterval(tick, 10000);
     return () => {
       cancelled = true;
       clearInterval(t);

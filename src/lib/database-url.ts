@@ -2,11 +2,14 @@ function env(name: string) {
   return (process.env[name] ?? "").trim();
 }
 
-function withServerlessParams(url: string) {
+function withPoolParams(url: string) {
+  const vercel = Boolean(process.env.VERCEL);
   const extras: string[] = [];
-  if (!/[?&]connection_limit=/.test(url)) extras.push("connection_limit=1");
-  if (!/[?&]pool_timeout=/.test(url)) extras.push("pool_timeout=5");
-  if (!/[?&]connect_timeout=/.test(url)) extras.push("connect_timeout=5");
+  // Serverless functions should hold one client connection. The long-running
+  // Node server shares a process across polls, so it needs a real pool.
+  if (!/[?&]connection_limit=/.test(url)) extras.push(vercel ? "connection_limit=1" : "connection_limit=10");
+  if (!/[?&]pool_timeout=/.test(url)) extras.push("pool_timeout=20");
+  if (!/[?&]connect_timeout=/.test(url)) extras.push("connect_timeout=10");
   if ((url.includes("-pooler.") || url.includes("pooler.")) && !/[?&]pgbouncer=/.test(url)) {
     extras.push("pgbouncer=true");
   }
@@ -29,7 +32,7 @@ export function resolveDatabaseUrl() {
 
 export function prismaDatasourceUrl() {
   const url = resolveDatabaseUrl();
-  return url ? withServerlessParams(url) : url;
+  return url ? withPoolParams(url) : url;
 }
 
 resolveDatabaseUrl();

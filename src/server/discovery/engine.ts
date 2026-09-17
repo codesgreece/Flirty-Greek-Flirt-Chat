@@ -100,7 +100,7 @@ function nextRefillAt() {
 export async function discoverFeed(userId: string, query: DiscoverQuery = {}) {
   const now = new Date();
   const recentlyActiveSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [me, seen, hidden, boosts, spotlights, blocks, overrides, signals] = await Promise.all([
+  const [me, seen, hidden, boosts, spotlights, blocks, overrides, signals, matches] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },
       include: {
@@ -137,6 +137,10 @@ export async function discoverFeed(userId: string, query: DiscoverQuery = {}) {
       take: 80,
       select: { subjectId: true, kind: true },
     }),
+    prisma.match.findMany({
+      where: { active: true, OR: [{ lowUserId: userId }, { highUserId: userId }] },
+      select: { lowUserId: true, highUserId: true },
+    }),
   ]);
   if (!me.profile?.onboardingCompletedAt) {
     return { cards: [], cursor: null, complete: false, empty: null, passport: null, dailyVibe: dailyVibeFor() };
@@ -167,9 +171,12 @@ export async function discoverFeed(userId: string, query: DiscoverQuery = {}) {
   );
 
   const exclude = new Set(
-    [userId, ...seen.map((s) => s.targetId), ...hidden.map((h) => h.hiddenId)].filter(
-      (id) => !secondChanceIds.has(id),
-    ),
+    [
+      userId,
+      ...seen.map((s) => s.targetId),
+      ...hidden.map((h) => h.hiddenId),
+      ...matches.map((row) => (row.lowUserId === userId ? row.highUserId : row.lowUserId)),
+    ].filter((id) => !secondChanceIds.has(id)),
   );
   const liked = new Set(seen.filter((row) => POSITIVE.includes(row.kind)).map((row) => row.targetId));
   const blocked = new Set(blocks.map((row) => (row.blockerId === userId ? row.blockedId : row.blockerId)));

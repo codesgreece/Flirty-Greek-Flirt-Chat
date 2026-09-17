@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { FlirtyButton } from "@/components/ui/FlirtyButton";
 
@@ -26,7 +28,10 @@ export function MatchModal({
   onMessage: () => void;
   onUseLine?: (line: string) => void;
 }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const panel = (
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/80 p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -95,4 +100,7 @@ export function MatchModal({
       )}
     </AnimatePresence>
   );
+
+  if (!mounted) return null;
+  return createPortal(panel, document.body);
 }

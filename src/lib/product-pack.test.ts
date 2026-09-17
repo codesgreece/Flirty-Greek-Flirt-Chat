@@ -37,7 +37,9 @@ describe("dealbreakers", () => {
 });
 
 describe("gifs", () => {
-  it("allows starter giphy urls only over https", () => {
+  it("allows local starter gifs and https giphy hosts", () => {
+    expect(isAllowedGifUrl("/gifs/wave.gif")).toBe(true);
+    expect(isAllowedGifUrl("/gifs/../secret.gif")).toBe(false);
     expect(isAllowedGifUrl("https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif")).toBe(true);
     expect(isAllowedGifUrl("http://evil.example/x.gif")).toBe(false);
   });

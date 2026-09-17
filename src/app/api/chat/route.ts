@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
       body: z.string().max(2000).optional(),
       clientId: z.string().min(4),
       replyToId: z.string().uuid().optional(),
-      gifUrl: z.string().url().optional(),
+      gifUrl: z.string().min(8).max(500).optional(),
       stickerId: z.string().max(40).optional(),
     }),
     body,

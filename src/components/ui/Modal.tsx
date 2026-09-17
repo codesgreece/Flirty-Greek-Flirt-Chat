@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/cn";
 import { motionTokens } from "@/lib/motion";
@@ -15,7 +17,10 @@ export function Modal({
   children: React.ReactNode;
   title?: string;
 }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const panel = (
     <AnimatePresence>
       {open && (
         <motion.div
@@ -40,6 +45,9 @@ export function Modal({
       )}
     </AnimatePresence>
   );
+
+  if (!mounted) return null;
+  return createPortal(panel, document.body);
 }
 
 export function UpgradeModal({
