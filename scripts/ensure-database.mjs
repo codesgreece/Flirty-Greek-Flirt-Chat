@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+/**
+ * Uses a permanent DATABASE_URL from Vercel/Neon env vars.
+ * Never provisions a 24h/72h throwaway database.
+ */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,63 +43,29 @@ function existingUrl() {
   ).trim();
 }
 
-function bake(url) {
-  if (url) process.env.DATABASE_URL = url;
-  mkdirSync(join(root, "src/generated"), { recursive: true });
-  const safe = url.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  writeFileSync(
-    join(root, "src/generated/database-url.ts"),
-    `/** Generated at build time. Do not commit secrets. */\nexport const BAKED_DATABASE_URL = "${safe}";\n`,
-  );
-  if (url && !existsSync(join(root, ".env"))) {
-    writeFileSync(join(root, ".env"), `DATABASE_URL="${url}"\n`);
-  }
+function run(command, args) {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-const current = existingUrl();
-if (current) {
-  console.log("[flirty] Using DATABASE_URL from the environment.");
-  process.exit(0);
-}
-
-console.log("[flirty] No DATABASE_URL. Provisioning Prisma Postgres for this deploy...");
-const result = spawnSync(
-  "npx",
-  ["--yes", "create-db@latest", "--json", "--region", "eu-central-1"],
-  { encoding: "utf8", cwd: root, timeout: 120_000 },
-);
-if (result.status !== 0) {
-  console.error(result.stdout);
-  console.error(result.stderr);
-  if (process.env.VERCEL) process.exit(result.status ?? 1);
-  console.warn("[flirty] Continuing without a database. Login will be unavailable.");
-  bake("");
-  process.exit(0);
-}
-
-const stdout = (result.stdout || "").trim();
-let parsed;
-try {
-  const start = stdout.indexOf("{");
-  const end = stdout.lastIndexOf("}");
-  parsed = JSON.parse(stdout.slice(start, end + 1));
-} catch (error) {
-  console.error("[flirty] Could not parse create-db output.", error);
-  if (process.env.VERCEL) process.exit(1);
-  bake("");
-  process.exit(0);
-}
-
-const url = parsed.connectionString || parsed.databaseUrl || "";
+const url = existingUrl();
 if (!url) {
-  console.error("[flirty] create-db returned no connection string.");
-  if (process.env.VERCEL) process.exit(1);
-  bake("");
+  console.warn("[flirty] No permanent DATABASE_URL / POSTGRES_URL.");
+  console.warn("[flirty] Create Neon/Postgres in Vercel Storage, connect Production, and redeploy.");
+  console.warn("[flirty] Skipping migrate/seed. Login stays unavailable until that env var exists.");
   process.exit(0);
 }
 
-if (parsed.claimUrl) {
-  console.log("[flirty] Claim this database so it is not deleted in 24 hours:");
-  console.log(parsed.claimUrl);
-}
-bake(url);
+const migrateUrl =
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DIRECT_URL ||
+  url;
+process.env.DATABASE_URL = migrateUrl;
+console.log("[flirty] Using permanent Postgres from the environment.");
+run("npx", ["prisma", "migrate", "deploy"]);
+process.env.DATABASE_URL = url;
+run("npx", ["prisma", "db", "seed"]);

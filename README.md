@@ -17,14 +17,15 @@ all first-party — no BaaS, no hosted auth, no Firebase/Supabase/Clerk.
 
 ## Vercel
 
-Production tracks **`master`** (also mirrored to `main`). If `DATABASE_URL` is not set, the Vercel build provisions Prisma Postgres and seeds demo accounts. Set these environment variables for a permanent database:
+Production tracks **`master`** (also mirrored to `main`). Login needs a **permanent** Postgres owned by the Vercel project — throwaway 24h/72h databases are not used.
 
-- `DATABASE_URL` — PostgreSQL connection string (or Vercel `POSTGRES_URL`)
-- `SESSION_SECRET` — 32+ character secret
-- `APP_URL` — `https://your-domain.vercel.app`
-- `REDIS_URL` — optional; in-memory limits are used if Redis is unreachable
+1. Vercel → Storage → Create Database → Neon/Postgres (connect Production)
+2. Settings → Environment Variables → `SESSION_SECRET` (32+ chars) and `APP_URL=https://flirty-ten.vercel.app`
+3. Redeploy Production. The build runs `prisma migrate deploy` and seeds demo accounts.
 
-Demo login after a bootstrap deploy: `admin@flirty.local` / `FlirtyAdmin!234` and `elena@flirty.local` / `FlirtyDev!234`. Claim the Prisma database from the Vercel build logs if you want it to survive 24 hours.
+Vercel Storage sets `POSTGRES_URL` / `POSTGRES_PRISMA_URL`. You can also set `DATABASE_URL` yourself. See `/setup`.
+
+Demo login after that deploy: `admin@flirty.local` / `FlirtyAdmin!234` and `elena@flirty.local` / `FlirtyDev!234`.
 
 
 ```bash

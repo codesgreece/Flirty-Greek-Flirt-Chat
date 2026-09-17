@@ -16,11 +16,13 @@ function AuthForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setErrorCode("");
     try {
       const result = await api<{ onboardingComplete?: boolean; isAdmin?: boolean }>(
         "/api/auth?action=" + (mode === "login" ? "login" : "register"),
@@ -39,6 +41,7 @@ function AuthForm() {
       window.location.assign(next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not continue.");
+      setErrorCode(err instanceof ApiError ? err.code : "");
     } finally {
       setLoading(false);
     }
@@ -81,7 +84,19 @@ function AuthForm() {
                 className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-flirty-pink"
               />
             </label>
-            {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+            {error ? (
+              <p className="text-sm text-rose-300">
+                {error}
+                {errorCode === "DATABASE" ? (
+                  <>
+                    {" "}
+                    <a href="/setup" className="underline">
+                      Άνοιξε το /setup
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
             <FlirtyButton type="submit" className="w-full" loading={loading} disabled={loading}>
               {mode === "login" ? "Log in" : "Create account"}
             </FlirtyButton>

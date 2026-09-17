@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "node scripts/ensure-database.mjs && prisma generate && prisma migrate deploy && prisma db seed && next build",
+  "buildCommand": "prisma generate && node scripts/ensure-database.mjs && next build",
   "git": {
     "deploymentEnabled": {
       "master": true,

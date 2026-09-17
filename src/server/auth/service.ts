@@ -39,7 +39,11 @@ async function ensureFreePlan(userId: string) {
 
 export async function registerUser(input: z.infer<typeof registerSchema>, meta: { ip: string; userAgent: string }) {
   if (!databaseConfigured()) {
-    throw new AppError("DATABASE", "FLIRTY could not reach its database. Try again in a moment.", 503);
+    throw new AppError(
+      "DATABASE",
+      "Permanent Postgres is not configured. Open /setup to connect a Vercel Neon database.",
+      503,
+    );
   }
   await rateLimit("register", meta.ip);
   const email = normalizeEmail(input.email);
@@ -64,7 +68,11 @@ export async function registerUser(input: z.infer<typeof registerSchema>, meta: 
 
 export async function loginUser(input: z.infer<typeof loginSchema>, meta: { ip: string; userAgent: string }) {
   if (!databaseConfigured()) {
-    throw new AppError("DATABASE", "FLIRTY could not reach its database. Try again in a moment.", 503);
+    throw new AppError(
+      "DATABASE",
+      "Permanent Postgres is not configured. Open /setup to connect a Vercel Neon database.",
+      503,
+    );
   }
   await rateLimit("login", meta.ip);
   const email = normalizeEmail(input.email);

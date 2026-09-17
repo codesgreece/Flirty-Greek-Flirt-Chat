@@ -27,7 +27,7 @@ export function publicErrorMessage(error: unknown): { status: number; body: { er
     return {
       status: 503,
       body: {
-        error: "FLIRTY could not reach its database. Try again in a moment.",
+        error: "Permanent Postgres is not configured. Open /setup to connect a Vercel Neon database.",
         code: "DATABASE",
       },
     };
