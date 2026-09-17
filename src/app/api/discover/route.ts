@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { mutate } from "@/server/http";
 import { discoverFeed, topPicks } from "@/server/discovery/engine";
 
+export const preferredRegion = ["fra1"];
+
 export async function GET(req: NextRequest) {
   const cursor = req.nextUrl.searchParams.get("cursor") ?? undefined;
   const picks = req.nextUrl.searchParams.get("top") === "1";

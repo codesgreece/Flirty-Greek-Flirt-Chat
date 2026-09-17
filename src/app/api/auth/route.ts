@@ -7,9 +7,11 @@ import { sha256 } from "@/lib/crypto";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "@/server/auth/session";
 import { logoutUser } from "@/server/auth/service";
-import { entitlementSnapshot } from "@/server/entitlements/engine";
+import { entitlementsForPlan, planForUser } from "@/server/entitlements/engine";
 import { usageSnapshot } from "@/server/usage/counters";
 import { ageFromDob } from "@/lib/dates";
+
+export const preferredRegion = ["fra1"];
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -42,15 +44,7 @@ export async function POST(req: NextRequest) {
     body,
     handler: async ({ data }) => {
       const result = await loginUser(loginSchema.parse(data), meta);
-      const user = await prisma.user.findUnique({
-        where: { id: result.userId },
-        include: { profile: true, adminProfile: true },
-      });
-      return {
-        ...result,
-        onboardingComplete: Boolean(user?.profile?.onboardingCompletedAt),
-        isAdmin: Boolean(user?.adminProfile) || user?.role === "ADMIN",
-      };
+      return result;
     },
   });
 }
@@ -58,24 +52,25 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const session = await readSession();
   if (!session) return Response.json({ user: null });
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: session.userId },
-    include: {
-      profile: { include: { photos: { orderBy: { sortOrder: "asc" } } } },
-      interests: { include: { interest: true } },
-      vibes: { include: { vibe: true } },
-      preference: true,
-      adminProfile: true,
-      boosts: { where: { status: "ACTIVE", expiresAt: { gt: new Date() } } },
-      passport: true,
-      privacy: true,
-      notificationPrefs: true,
-    },
-  });
-  const [entitlements, usage] = await Promise.all([
-    entitlementSnapshot(user.id),
-    usageSnapshot(user.id),
+  const [user, plan, usage] = await Promise.all([
+    prisma.user.findUniqueOrThrow({
+      where: { id: session.userId },
+      include: {
+        profile: { include: { photos: { orderBy: { sortOrder: "asc" } } } },
+        interests: { include: { interest: true } },
+        vibes: { include: { vibe: true } },
+        preference: true,
+        adminProfile: true,
+        boosts: { where: { status: "ACTIVE", expiresAt: { gt: new Date() } } },
+        passport: true,
+        privacy: true,
+        notificationPrefs: true,
+      },
+    }),
+    planForUser(session.userId),
+    usageSnapshot(session.userId),
   ]);
+  const entitlements = entitlementsForPlan(plan);
   return Response.json({
     user: {
       id: user.id,

@@ -1,12 +1,11 @@
 import { z } from "zod";
 import { prisma, databaseConfigured } from "@/server/db";
 import { AppError } from "@/server/errors";
-import { hashPassword, verifyPassword } from "@/server/auth/password";
+import { hashPassword, verifyPassword, passwordHashNeedsUpgrade } from "@/server/auth/password";
 import { createSession, setSessionCookie, clearSessionCookie } from "@/server/auth/session";
 import { audit } from "@/server/audit";
 import { track } from "@/server/analytics";
 import { hashIp } from "@/lib/crypto";
-import { rateLimit } from "@/server/rate-limit";
 import { PLAN_LIMITS } from "@/server/entitlements/catalog";
 
 export const registerSchema = z.object({
@@ -45,7 +44,6 @@ export async function registerUser(input: z.infer<typeof registerSchema>, meta: 
       503,
     );
   }
-  await rateLimit("register", meta.ip);
   const email = normalizeEmail(input.email);
   const existing = await prisma.user.findUnique({ where: { emailNormalized: email } });
   if (existing) throw new AppError("EMAIL_TAKEN", "An account with this email already exists.", 409);
@@ -61,9 +59,9 @@ export async function registerUser(input: z.infer<typeof registerSchema>, meta: 
   await ensureFreePlan(user.id);
   const session = await createSession(user.id, { userAgent: meta.userAgent, ipHash: hashIp(meta.ip) });
   await setSessionCookie(session.token, session.expiresAt);
-  await audit({ action: "REGISTER", userId: user.id, ipHash: hashIp(meta.ip) });
-  await track("user_registered", user.id);
-  return { userId: user.id };
+  void audit({ action: "REGISTER", userId: user.id, ipHash: hashIp(meta.ip) });
+  void track("user_registered", user.id);
+  return { userId: user.id, onboardingComplete: false, isAdmin: false };
 }
 
 export async function loginUser(input: z.infer<typeof loginSchema>, meta: { ip: string; userAgent: string }) {
@@ -74,32 +72,37 @@ export async function loginUser(input: z.infer<typeof loginSchema>, meta: { ip: 
       503,
     );
   }
-  await rateLimit("login", meta.ip);
   const email = normalizeEmail(input.email);
-  const user = await prisma.user.findUnique({ where: { emailNormalized: email } });
-  const fail = async (userId?: string) => {
-    await prisma.loginAttempt.create({
-      data: { userId, email, success: false, ipHash: hashIp(meta.ip) },
+  const user = await prisma.user.findUnique({
+    where: { emailNormalized: email },
+    include: { profile: true, adminProfile: true },
+  });
+  const fail = (): never => {
+    void prisma.loginAttempt.create({
+      data: { userId: user?.id, email, success: false, ipHash: hashIp(meta.ip) },
     });
-    await audit({ action: "LOGIN_FAILED", userId, metadata: { email }, ipHash: hashIp(meta.ip) });
+    void audit({ action: "LOGIN_FAILED", userId: user?.id, metadata: { email }, ipHash: hashIp(meta.ip) });
     throw new AppError("INVALID_CREDENTIALS", "Email or password is incorrect.", 401);
   };
-  if (!user || user.status !== "ACTIVE") {
-    await fail(user?.id);
-    return { userId: "", onboardingComplete: false };
-  }
+  if (!user || user.status !== "ACTIVE") return fail();
   const ok = await verifyPassword(user.passwordHash, input.password);
-  if (!ok) {
-    await fail(user.id);
-    return { userId: "", onboardingComplete: false };
-  }
+  if (!ok) return fail();
   const session = await createSession(user.id, { userAgent: meta.userAgent, ipHash: hashIp(meta.ip) });
   await setSessionCookie(session.token, session.expiresAt);
-  await prisma.loginAttempt.create({
+  if (passwordHashNeedsUpgrade(user.passwordHash)) {
+    void hashPassword(input.password).then((nextHash) =>
+      prisma.user.update({ where: { id: user.id }, data: { passwordHash: nextHash } }),
+    );
+  }
+  void prisma.loginAttempt.create({
     data: { userId: user.id, email, success: true, ipHash: hashIp(meta.ip) },
   });
-  await audit({ action: "LOGIN_SUCCESS", userId: user.id, ipHash: hashIp(meta.ip) });
-  return { userId: user.id, onboardingComplete: Boolean(user) };
+  void audit({ action: "LOGIN_SUCCESS", userId: user.id, ipHash: hashIp(meta.ip) });
+  return {
+    userId: user.id,
+    onboardingComplete: Boolean(user.profile?.onboardingCompletedAt),
+    isAdmin: Boolean(user.adminProfile) || user.role === "ADMIN",
+  };
 }
 
 export async function logoutUser(tokenHash: string, userId: string) {
@@ -108,7 +111,7 @@ export async function logoutUser(tokenHash: string, userId: string) {
     data: { revokedAt: new Date() },
   });
   await clearSessionCookie();
-  await audit({ action: "SESSION_REVOKED", userId });
+  void audit({ action: "SESSION_REVOKED", userId });
 }
 
 export async function changePassword(userId: string, current: string, next: string) {

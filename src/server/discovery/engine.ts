@@ -1,11 +1,11 @@
-import { InteractionKind } from "@prisma/client";
+import { InteractionKind, type PlanCode } from "@prisma/client";
 import { prisma } from "@/server/db";
-import { getCompatibility } from "@/server/compatibility/service";
+import { scoreCompatibility, type CompatibilityInput } from "@/server/compatibility/engine";
 import { ageFromDob } from "@/lib/dates";
 import { haversineKm, fuzzyDistanceLabel } from "@/lib/geo";
-import { hasCapability } from "@/server/entitlements/engine";
-import { CAPABILITIES } from "@/server/entitlements/catalog";
-import { areBlocked } from "@/server/safety/service";
+import { CAPABILITIES, PLAN_LIMITS } from "@/server/entitlements/catalog";
+
+export const POSITIVE: InteractionKind[] = ["LIKE", "FLIRT", "SUPER_LIKE"];
 
 function originFor(user: {
   passport: { active: boolean; latitude: number; longitude: number } | null;
@@ -18,26 +18,95 @@ function originFor(user: {
   return null;
 }
 
+function asRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
+  );
+}
+
+function activePlan(sub: { status: string; expiresAt: Date; plan: { code: PlanCode } } | null): PlanCode {
+  if (!sub || sub.status !== "ACTIVE" || sub.expiresAt < new Date()) return "FREE";
+  return sub.plan.code;
+}
+
+function toCompatInput(
+  user: {
+    interests: Array<{ interest: { slug: string } }>;
+    vibes: Array<{ vibe: { code: string } }>;
+    preference: { minAge: number; maxAge: number; maxDistanceKm: number } | null;
+    compatibility: { answers: unknown; communicationStyle: string | null } | null;
+    profile: {
+      datingIntention: string;
+      dateOfBirth: Date;
+      lifestyle: unknown;
+    } | null;
+  },
+  distanceKm: number | null,
+): CompatibilityInput {
+  const answers = asRecord(user.compatibility?.answers);
+  return {
+    interests: user.interests.map((row) => row.interest.slug),
+    vibes: user.vibes.map((row) => row.vibe.code),
+    intention: user.profile?.datingIntention ?? "DATING",
+    age: user.profile ? ageFromDob(user.profile.dateOfBirth) : 25,
+    preferredAge: {
+      min: user.preference?.minAge ?? 18,
+      max: user.preference?.maxAge ?? 45,
+    },
+    distanceKm,
+    maxDistanceKm: user.preference?.maxDistanceKm ?? 80,
+    lifestyle: asRecord(user.profile?.lifestyle),
+    personality: answers,
+    relationshipGoal: user.profile?.datingIntention ?? "DATING",
+    activity: answers.activity ?? "",
+    communication: answers.communication ?? user.compatibility?.communicationStyle ?? "",
+  };
+}
+
 export async function discoverFeed(userId: string, cursor?: string) {
-  const me = await prisma.user.findUniqueOrThrow({
-    where: { id: userId },
-    include: { profile: true, preference: true, passport: true },
-  });
+  const [me, seen, hidden, boosts, blocks, overrides] = await Promise.all([
+    prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: {
+        profile: true,
+        preference: true,
+        passport: true,
+        interests: { include: { interest: true } },
+        vibes: { include: { vibe: true } },
+        compatibility: true,
+        subscription: { include: { plan: true } },
+      },
+    }),
+    prisma.interaction.findMany({
+      where: { actorId: userId, active: true },
+      select: { targetId: true, kind: true },
+    }),
+    prisma.hiddenProfile.findMany({ where: { userId }, select: { hiddenId: true } }),
+    prisma.boost.findMany({
+      where: { status: "ACTIVE", expiresAt: { gt: new Date() } },
+      select: { userId: true },
+    }),
+    prisma.block.findMany({
+      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+      select: { blockerId: true, blockedId: true },
+    }),
+    prisma.userEntitlement.findMany({ where: { userId }, select: { capability: true, enabled: true } }),
+  ]);
   if (!me.profile?.onboardingCompletedAt) return { cards: [], cursor: null, complete: false };
+  const myProfile = me.profile;
 
-  const seen = await prisma.interaction.findMany({
-    where: { actorId: userId, active: true },
-    select: { targetId: true },
-  });
-  const hidden = await prisma.hiddenProfile.findMany({ where: { userId } });
   const exclude = new Set([userId, ...seen.map((s) => s.targetId), ...hidden.map((h) => h.hiddenId)]);
-
-  const boosts = await prisma.boost.findMany({
-    where: { status: "ACTIVE", expiresAt: { gt: new Date() } },
-    select: { userId: true },
-  });
+  const liked = new Set(
+    seen.filter((row) => POSITIVE.includes(row.kind)).map((row) => row.targetId),
+  );
+  const blocked = new Set(
+    blocks.map((row) => (row.blockerId === userId ? row.blockedId : row.blockerId)),
+  );
   const boosted = new Set(boosts.map((b) => b.userId));
-  const priority = await hasCapability(userId, CAPABILITIES.PROFILE_PRIORITY);
+  const plan = activePlan(me.subscription);
+  const override = overrides.find((row) => row.capability === CAPABILITIES.PROFILE_PRIORITY);
+  const priority = override ? override.enabled : PLAN_LIMITS[plan].capabilities.includes(CAPABILITIES.PROFILE_PRIORITY);
 
   const candidates = await prisma.profile.findMany({
     where: {
@@ -49,29 +118,44 @@ export async function discoverFeed(userId: string, cursor?: string) {
       gender: me.preference?.genders?.length ? { in: me.preference.genders } : undefined,
     },
     include: {
-      user: { include: { interests: { include: { interest: true } }, vibes: { include: { vibe: true } }, passport: true, subscription: { include: { plan: true } } } },
+      user: {
+        include: {
+          interests: { include: { interest: true } },
+          vibes: { include: { vibe: true } },
+          passport: true,
+          preference: true,
+          compatibility: true,
+          subscription: { include: { plan: true } },
+        },
+      },
       photos: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } },
     },
     take: 40,
   });
 
   const meOrigin = originFor(me);
+  const selfBase = toCompatInput(me, null);
   const ranked = [];
   for (const profile of candidates) {
-    if (profile.incognito) {
-      const incoming = await prisma.interaction.findFirst({
-        where: { actorId: userId, targetId: profile.userId, active: true, kind: { in: ["LIKE", "FLIRT", "SUPER_LIKE"] } },
-      });
-      if (!incoming) continue;
-    }
-    if (await areBlocked(userId, profile.userId)) continue;
+    if (profile.incognito && !liked.has(profile.userId)) continue;
+    if (blocked.has(profile.userId)) continue;
     const age = ageFromDob(profile.dateOfBirth);
     if (age < (me.preference?.minAge ?? 18) || age > (me.preference?.maxAge ?? 99)) continue;
-    if (me.profile.seeking.length && !me.profile.seeking.includes(profile.gender)) continue;
+    if (myProfile.seeking.length && !myProfile.seeking.includes(profile.gender)) continue;
     const otherOrigin = originFor({ passport: profile.user.passport, profile });
     const distance = meOrigin && otherOrigin ? haversineKm(meOrigin, otherOrigin) : null;
     if (distance != null && distance > (me.preference?.maxDistanceKm ?? 80) + 25) continue;
-    const compat = await getCompatibility(userId, profile.userId);
+    const other = toCompatInput(
+      {
+        interests: profile.user.interests,
+        vibes: profile.user.vibes,
+        preference: profile.user.preference,
+        compatibility: profile.user.compatibility,
+        profile,
+      },
+      distance,
+    );
+    const compat = scoreCompatibility(selfBase, other);
     let rank = compat.score;
     if (boosted.has(profile.userId)) rank += 18;
     if (profile.verificationStatus === "VERIFIED") rank += 6;
@@ -92,7 +176,7 @@ export async function discoverFeed(userId: string, cursor?: string) {
     age: row.age,
     verified: row.profile.verificationStatus === "VERIFIED",
     city: row.profile.city,
-    distanceLabel: fuzzyDistanceLabel(row.distance, row.profile.showDistance && (me.profile?.showDistance ?? true)),
+    distanceLabel: fuzzyDistanceLabel(row.distance, row.profile.showDistance && myProfile.showDistance),
     intention: row.profile.datingIntention,
     bio: row.profile.bio,
     prompts: row.profile.prompts,
@@ -121,10 +205,14 @@ export async function discoverFeed(userId: string, cursor?: string) {
 }
 
 export async function topPicks(userId: string) {
-  const allowed = await hasCapability(userId, CAPABILITIES.TOP_PICKS);
+  const [override, sub] = await Promise.all([
+    prisma.userEntitlement.findUnique({
+      where: { userId_capability: { userId, capability: CAPABILITIES.TOP_PICKS } },
+    }),
+    prisma.subscription.findUnique({ where: { userId }, include: { plan: true } }),
+  ]);
+  const allowed = override ? override.enabled : PLAN_LIMITS[activePlan(sub)].capabilities.includes(CAPABILITIES.TOP_PICKS);
   if (!allowed) return { locked: true, cards: [] as Awaited<ReturnType<typeof discoverFeed>>["cards"] };
   const feed = await discoverFeed(userId);
   return { locked: false, cards: feed.cards.slice(0, 4) };
 }
-
-export const POSITIVE: InteractionKind[] = ["LIKE", "FLIRT", "SUPER_LIKE"];

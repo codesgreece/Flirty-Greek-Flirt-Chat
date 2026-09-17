@@ -67,14 +67,22 @@ export async function consumeUsage(userId: string, key: CounterKey) {
   return { remaining: limit - row.count, used: row.count };
 }
 
-export async function usageSnapshot(userId: string) {
-  const plan = await planForUser(userId);
-  const keys: CounterKey[] = ["likes", "flirts", "rewinds", "super_likes", "direct_messages", "boosts"];
-  const entries = await Promise.all(
-    keys.map(async (key) => {
-      const used = await readUsage(userId, key);
-      return [key, { used, limit: limitFor(plan, key) }] as const;
+const USAGE_KEYS: CounterKey[] = ["likes", "flirts", "rewinds", "super_likes", "direct_messages", "boosts"];
+
+export async function usageSnapshot(userId: string, plan?: Awaited<ReturnType<typeof planForUser>>) {
+  const periods = [...new Set(USAGE_KEYS.map(periodFor))];
+  const [resolved, rows] = await Promise.all([
+    plan ? Promise.resolve(plan) : planForUser(userId),
+    prisma.usageCounter.findMany({
+      where: { userId, periodKey: { in: periods } },
+      select: { key: true, periodKey: true, count: true },
     }),
+  ]);
+  const used = new Map(rows.map((row) => [`${row.key}:${row.periodKey}`, row.count]));
+  return Object.fromEntries(
+    USAGE_KEYS.map((key) => [
+      key,
+      { used: used.get(`${key}:${periodFor(key)}`) ?? 0, limit: limitFor(resolved, key) },
+    ]),
   );
-  return Object.fromEntries(entries);
 }

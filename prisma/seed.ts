@@ -69,8 +69,8 @@ async function main() {
     console.log("Production database already has users; skipping seed.");
     return;
   }
-  const passwordHash = await hash(PASSWORD, { memoryCost: 19456, timeCost: 2, algorithm: 2 });
-  const adminHash = await hash(ADMIN_PASSWORD, { memoryCost: 19456, timeCost: 2, algorithm: 2 });
+  const passwordHash = await hash(PASSWORD, { memoryCost: 4096, timeCost: 1, algorithm: 2 });
+  const adminHash = await hash(ADMIN_PASSWORD, { memoryCost: 4096, timeCost: 1, algorithm: 2 });
   const uploadRoot = path.resolve("./data/uploads/photos");
   const publicUploadRoot = path.resolve("./public/uploads/photos");
   await mkdir(uploadRoot, { recursive: true });

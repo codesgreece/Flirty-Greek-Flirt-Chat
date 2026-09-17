@@ -12,9 +12,16 @@ export default function AdminPage() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const load = useCallback(async () => {
-    setOverview(await api("/api/admin?section=overview"));
-    setUsers(await api(`/api/admin?section=users&q=${encodeURIComponent(q)}`));
-    setReports(await api("/api/admin?section=reports"));
+    const [overviewRow, userRows, reportRows] = await Promise.all([
+      api<Record<string, number>>("/api/admin?section=overview"),
+      api<Array<{ id: string; email: string; status: string; profile: { displayName: string } | null }>>(
+        `/api/admin?section=users&q=${encodeURIComponent(q)}`,
+      ),
+      api<Array<{ id: string; category: string; status: string }>>("/api/admin?section=reports"),
+    ]);
+    setOverview(overviewRow);
+    setUsers(userRows);
+    setReports(reportRows);
   }, [q]);
   useEffect(() => {
     load().catch(() => undefined);

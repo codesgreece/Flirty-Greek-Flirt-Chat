@@ -6,11 +6,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { FlirtyWordmark } from "@/components/brand/FlirtyLogo";
 import { FlirtyButton } from "@/components/ui/FlirtyButton";
 import { api, ApiError } from "@/lib/api";
-import { useApp } from "@/components/providers/AppProviders";
 
 function AuthForm() {
   const params = useSearchParams();
-  const { refresh, toast } = useApp();
   const [mode, setMode] = useState(params.get("mode") === "login" ? "login" : "register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,12 +30,6 @@ function AuthForm() {
         },
       );
       const next = result.isAdmin ? "/admin" : result.onboardingComplete ? "/app/discover" : "/onboarding";
-      try {
-        await refresh();
-      } catch {
-        /* still enter the app after a successful login */
-      }
-      toast(mode === "login" ? "Welcome back" : "Account created");
       window.location.assign(next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not continue.");
@@ -56,7 +48,7 @@ function AuthForm() {
           initial={{ opacity: 0, x: mode === "register" ? 16 : -16 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: mode === "register" ? -16 : 16 }}
-          transition={{ duration: 0.22 }}
+          transition={{ duration: 0.1 }}
         >
           <h1 className="mt-10 text-3xl font-bold">{mode === "login" ? "Welcome back" : "Create your FLIRTY"}</h1>
           <p className="mt-2 text-white/60">

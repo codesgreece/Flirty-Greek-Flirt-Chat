@@ -8,5 +8,8 @@ export async function GET(req: NextRequest) {
     const flag = enabled.find((f) => f.key === requested);
     return Response.json({ key: requested, enabled: flag?.enabled ?? false });
   }
-  return Response.json({ flags: Object.fromEntries(enabled.map((f) => [f.key, f.enabled])) });
+  return Response.json(
+    { flags: Object.fromEntries(enabled.map((f) => [f.key, f.enabled])) },
+    { headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=60" } },
+  );
 }

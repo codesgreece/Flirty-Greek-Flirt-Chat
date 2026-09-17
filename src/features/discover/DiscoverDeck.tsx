@@ -65,8 +65,8 @@ export function DiscoverDeck() {
           photo: leaving.photos[0]?.src,
         });
       }
-      await refresh();
-      if (cards.length < 4) load().catch(() => undefined);
+      void refresh();
+      if (cards.length < 4) void load();
     } catch (error) {
       if (leaving) setCards((list) => [leaving, ...list]);
       if (error instanceof ApiError && (error.code === "UPGRADE_REQUIRED" || error.code === "LIMIT_REACHED")) {

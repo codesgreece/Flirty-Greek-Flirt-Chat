@@ -1,6 +1,7 @@
 {
   "framework": "nextjs",
   "buildCommand": "prisma generate && node scripts/ensure-database.mjs && next build",
+  "regions": ["fra1"],
   "git": {
     "deploymentEnabled": {
       "master": true,

@@ -40,18 +40,31 @@ export async function readSession() {
     if (!token) return null;
     const session = await prisma.deviceSession.findUnique({
       where: { tokenHash: sha256(token) },
-      include: { user: { include: { profile: true, adminProfile: true, subscription: { include: { plan: true } } } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            status: true,
+            role: true,
+            adminProfile: { select: { id: true } },
+            profile: { select: { id: true, onboardingCompletedAt: true } },
+          },
+        },
+      },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
     if (session.user.status !== "ACTIVE") return null;
-    await prisma.deviceSession.update({
-      where: { id: session.id },
-      data: { lastSeenAt: new Date() },
-    });
-    await prisma.user.update({
-      where: { id: session.userId },
-      data: { lastActiveAt: new Date() },
-    });
+    const stale = Date.now() - session.lastSeenAt.getTime() > 60_000;
+    if (stale) {
+      void prisma.deviceSession.update({
+        where: { id: session.id },
+        data: { lastSeenAt: new Date() },
+      });
+      void prisma.user.update({
+        where: { id: session.userId },
+        data: { lastActiveAt: new Date() },
+      });
+    }
     return session;
   } catch {
     return null;

@@ -4,10 +4,13 @@ import "./globals.css";
 import { AppProviders } from "@/components/providers/AppProviders";
 import "@/lib/database-url";
 
+export const preferredRegion = ["fra1"];
+
 const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-plus-jakarta",
   display: "swap",
+  preload: true,
 });
 
 function publicSiteUrl() {

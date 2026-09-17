@@ -63,12 +63,24 @@ let usingMemory = false;
 
 export function getRedis(): Redis | MemoryRedis {
   if (client) return client;
+  const url = process.env.REDIS_URL?.trim() || getEnv().REDIS_URL;
+  const isLocal =
+    !url ||
+    url.includes("127.0.0.1") ||
+    url.includes("localhost") ||
+    Boolean(process.env.VERCEL && url.includes("127.0.0.1"));
+  if (isLocal) {
+    client = new MemoryRedis();
+    usingMemory = true;
+    return client;
+  }
   try {
-    const redis = new Redis(getEnv().REDIS_URL, {
+    const redis = new Redis(url, {
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
       lazyConnect: true,
-      connectTimeout: 400,
+      connectTimeout: 200,
+      commandTimeout: 200,
     });
     client = redis;
     redis.on("error", () => {

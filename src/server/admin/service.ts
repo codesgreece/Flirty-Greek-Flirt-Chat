@@ -3,7 +3,7 @@ import { AppError } from "@/server/errors";
 import { audit } from "@/server/audit";
 
 export async function adminOverview() {
-  const [users, active, flirts, matches, messages, reports, pendingVerifications, plans] = await Promise.all([
+  const [users, active, flirts, matches, messages, reports, pendingVerifications, plans, ledger] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { lastActiveAt: { gt: new Date(Date.now() - 86400_000) } } }),
     prisma.interaction.count({ where: { kind: "FLIRT", createdAt: { gt: new Date(Date.now() - 86400_000) } } }),
@@ -12,8 +12,8 @@ export async function adminOverview() {
     prisma.report.count({ where: { status: "OPEN" } }),
     prisma.verification.count({ where: { status: "PENDING" } }),
     prisma.subscription.groupBy({ by: ["planId"], _count: true }),
+    prisma.billingLedger.aggregate({ _sum: { amountCents: true } }),
   ]);
-  const ledger = await prisma.billingLedger.aggregate({ _sum: { amountCents: true } });
   return {
     users,
     active,

@@ -33,8 +33,7 @@ export async function requireCapability(userId: string, capability: Capability, 
   }
 }
 
-export async function entitlementSnapshot(userId: string) {
-  const plan = await planForUser(userId);
+export function entitlementsForPlan(plan: PlanCode) {
   const limits = PLAN_LIMITS[plan];
   return {
     plan,
@@ -43,4 +42,8 @@ export async function entitlementSnapshot(userId: string) {
       Object.values(CAPABILITIES).map((cap) => [cap, limits.capabilities.includes(cap)]),
     ) as Record<Capability, boolean>,
   };
+}
+
+export async function entitlementSnapshot(userId: string, plan?: PlanCode) {
+  return entitlementsForPlan(plan ?? (await planForUser(userId)));
 }

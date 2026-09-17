@@ -10,7 +10,7 @@ function defaultAppUrl() {
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
-  REDIS_URL: z.string().min(1).default("redis://127.0.0.1:6379"),
+  REDIS_URL: z.string().min(1).optional(),
   SESSION_SECRET: z
     .string()
     .min(32)

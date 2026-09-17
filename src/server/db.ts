@@ -1,18 +1,17 @@
 import { PrismaClient } from "@prisma/client";
-import { resolveDatabaseUrl } from "@/lib/database-url";
+import { prismaDatasourceUrl, resolveDatabaseUrl } from "@/lib/database-url";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createPrisma() {
-  const url = resolveDatabaseUrl();
-  const client =
-    globalForPrisma.prisma ??
-    new PrismaClient({
+  const url = prismaDatasourceUrl();
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = new PrismaClient({
       log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
       ...(url ? { datasources: { db: { url } } } : {}),
     });
-  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;
-  return client;
+  }
+  return globalForPrisma.prisma;
 }
 
 export function databaseConfigured() {
