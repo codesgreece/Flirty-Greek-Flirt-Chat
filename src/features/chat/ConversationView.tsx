@@ -355,7 +355,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
       </Modal>
 
       <Modal open={reportOpen} onClose={() => setReportOpen(false)} title="Report">
-        <p className="text-sm text-white/70">We'll review this conversation privately.</p>
+        <p className="text-sm text-white/70">We will review this conversation privately.</p>
         <button type="button" className="mt-4 w-full rounded-full bg-flirty-pink py-3" onClick={() => safety("report")}>
           Send report
         </button>
