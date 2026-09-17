@@ -25,6 +25,8 @@ type MatchRow = {
   highUser: { id: string; profile: { displayName: string; photos: { mediumKey: string }[] } | null };
 };
 
+const UPGRADE_DISMISS_KEY = "flirty.likesUpgradeDismissed";
+
 export default function LikesPage() {
   const { me, toast } = useApp();
   const router = useRouter();
@@ -32,6 +34,15 @@ export default function LikesPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [upgradeDismissed, setUpgradeDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setUpgradeDismissed(sessionStorage.getItem(UPGRADE_DISMISS_KEY) === "1");
+    } catch {
+      /* private mode */
+    }
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -113,8 +124,15 @@ export default function LikesPage() {
         </div>
       )}
       <UpgradeModal
-        open={locked && me?.entitlements.plan === "FREE"}
-        onClose={() => undefined}
+        open={locked && me?.entitlements.plan === "FREE" && !upgradeDismissed}
+        onClose={() => {
+          setUpgradeDismissed(true);
+          try {
+            sessionStorage.setItem(UPGRADE_DISMISS_KEY, "1");
+          } catch {
+            /* private mode */
+          }
+        }}
         title="See who likes you"
         body="Gold shows the people already waiting."
         required="GOLD"
