@@ -12,7 +12,6 @@ export function MatchModal({
   photo,
   myPhoto,
   icebreakers = [],
-  breakdown,
   onKeep,
   onMessage,
   onUseLine,
@@ -58,16 +57,11 @@ export function MatchModal({
             <motion.h2 className="mt-8 text-4xl font-extrabold" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.4 }}>
               IT&apos;S A MATCH
             </motion.h2>
-            <p className="mt-2 text-white/70">You both liked each other.</p>
-            <motion.p className="mt-1 text-flirty-pink" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
-              {score}% overall · {name}
-            </motion.p>
-            {breakdown ? (
-              <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] text-white/70">
-                <p>Interests {breakdown.interests}%</p>
-                <p>Vibe {breakdown.vibe}%</p>
-                <p>Intention {breakdown.intent}%</p>
-              </div>
+            <p className="mt-2 text-white/70">You and {name} liked each other.</p>
+            {score ? (
+              <motion.p className="mt-1 text-sm text-white/45" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
+                {score}% match
+              </motion.p>
             ) : null}
             {icebreakers.length ? (
               <div className="mt-5 space-y-2 text-left">

@@ -41,3 +41,22 @@ export function Avatar({
     </span>
   );
 }
+
+export function StoryAvatar({
+  src,
+  name,
+  size = 56,
+}: {
+  src?: string | null;
+  name: string;
+  size?: number;
+}) {
+  return (
+    <span
+      className="mx-auto block rounded-full bg-gradient-to-br from-amber-300 to-flirty-pink p-[2px]"
+      style={{ width: size + 4, height: size + 4 }}
+    >
+      <Avatar src={src} name={name} size={size} />
+    </span>
+  );
+}
