@@ -115,6 +115,7 @@ export function DiscoverDeck() {
   }, [load]);
 
   async function saveFilters() {
+    setFiltersOpen(false);
     await api("/api/profiles", {
       method: "PATCH",
       body: JSON.stringify({
@@ -127,7 +128,6 @@ export function DiscoverDeck() {
         slowDiscover: slow,
       }),
     });
-    setFiltersOpen(false);
     await load();
     void refresh();
   }
@@ -451,7 +451,7 @@ function ProfileSwipeCard({
     >
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${photo.src})` }} />
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-      <div className="absolute inset-x-0 top-0 bottom-40 z-10 flex">
+      <div className="absolute inset-x-0 top-0 z-10 flex h-[38%]">
         <button type="button" className="w-[32%]" aria-label="Previous photo" onClick={() => setPhotoIndex((i) => Math.max(0, i - 1))} />
         <button type="button" className="flex-1" aria-label="Next photo" onClick={() => setPhotoIndex((i) => Math.min(photos.length - 1, i + 1))} />
       </div>

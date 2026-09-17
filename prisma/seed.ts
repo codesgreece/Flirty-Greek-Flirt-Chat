@@ -191,6 +191,7 @@ async function main() {
           dailyVibeQuestion: dailyVibeFor(),
           dailyVibeAnswer: person.bio.split(".")[0] ?? person.bio,
           dailyVibeAt: new Date(),
+          verificationStatus: person.name === "Elena" || person.name === "Nikos" ? "VERIFIED" : "UNVERIFIED",
         },
       });
       await prisma.profilePhoto.deleteMany({ where: { profileId: user.profile.id } });

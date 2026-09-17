@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { EmptyState, Skeleton } from "@/components/ui/EmptyState";
-import { useApp } from "@/components/providers/AppProviders";
 import { UpgradeModal } from "@/components/ui/Modal";
 import { useRouter } from "next/navigation";
 
@@ -16,7 +15,6 @@ type ViewRow = {
 };
 
 export default function WhoViewedYouPage() {
-  const { me } = useApp();
   const router = useRouter();
   const [rows, setRows] = useState<ViewRow[] | null>(null);
   const [locked, setLocked] = useState(false);
@@ -37,7 +35,17 @@ export default function WhoViewedYouPage() {
     <section className="space-y-5">
       <h1 className="text-2xl font-bold">Who viewed you</h1>
       {!rows.length ? (
-        <EmptyState title="No views yet" body="When someone opens your profile, they show up here." />
+        <EmptyState
+          title={locked ? "See who viewed you" : "No views yet"}
+          body={locked ? "Gold shows the people who stopped on your profile." : "When someone opens your profile, they show up here."}
+          action={
+            locked ? (
+              <button type="button" className="rounded-full bg-flirty-pink px-4 py-2" onClick={() => setUpgrade(true)}>
+                See plans
+              </button>
+            ) : null
+          }
+        />
       ) : (
         <ul className="space-y-2">
           {rows.map((row) => (
@@ -63,7 +71,7 @@ export default function WhoViewedYouPage() {
         </ul>
       )}
       <UpgradeModal
-        open={upgrade || (locked && me?.entitlements.plan === "FREE")}
+        open={upgrade}
         onClose={() => setUpgrade(false)}
         title="See who viewed you"
         body="Gold shows the people who stopped on your profile."
