@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-type Note = { id: string; title: string; body: string; createdAt: string; readAt: string | null };
+type Note = { id: string; kind?: string; title: string; body: string; createdAt: string; readAt: string | null };
 
 export default function NotificationsPage() {
   const [rows, setRows] = useState<Note[]>([]);
@@ -15,6 +16,7 @@ export default function NotificationsPage() {
   return (
     <section>
       <h1 className="text-2xl font-bold">Notifications</h1>
+      <Link href="/app/views" className="mt-3 inline-block text-sm text-flirty-pink">Who viewed you</Link>
       <ul className="mt-4 space-y-2">
         {rows.map((n) => (
           <li key={n.id} className="rounded-2xl bg-white/5 px-4 py-3">

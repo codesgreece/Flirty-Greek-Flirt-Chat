@@ -5,6 +5,9 @@ import { activateBoost, activatePlan, setIncognito, setPassport } from "@/server
 import { entitlementSnapshot } from "@/server/entitlements/engine";
 import { usageSnapshot } from "@/server/usage/counters";
 import { prisma } from "@/server/db";
+import { findPassportCity, PASSPORT_CITIES } from "@/lib/cities";
+import { AppError } from "@/server/errors";
+import { getWallet } from "@/server/shop/service";
 
 export async function GET() {
   return mutate({
@@ -14,6 +17,8 @@ export async function GET() {
       plans: await prisma.subscriptionPlan.findMany({ orderBy: { priceCents: "asc" } }),
       entitlements: await entitlementSnapshot(userId!),
       usage: await usageSnapshot(userId!),
+      wallet: await getWallet(userId!),
+      cities: PASSPORT_CITIES,
     }),
   });
 }
@@ -33,13 +38,29 @@ export async function POST(req: NextRequest) {
     return mutate({
       auth: "user",
       schema: z.object({
-        city: z.string(),
-        country: z.string(),
-        latitude: z.number(),
-        longitude: z.number(),
+        city: z.string().optional(),
+        clear: z.boolean().optional(),
+        country: z.string().optional(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
       }),
       body,
-      handler: ({ userId, data }) => setPassport(userId!, data as never),
+      handler: ({ userId, data }) => {
+        const payload = data as {
+          city?: string;
+          clear?: boolean;
+          country?: string;
+          latitude?: number;
+          longitude?: number;
+        };
+        if (payload.clear) return setPassport(userId!, null);
+        const known = payload.city ? findPassportCity(payload.city) : null;
+        const dest = known ?? (payload.city && payload.country && payload.latitude != null && payload.longitude != null
+          ? { city: payload.city, country: payload.country, latitude: payload.latitude, longitude: payload.longitude }
+          : null);
+        if (!dest) throw new AppError("INVALID", "Pick a city from the list.", 400);
+        return setPassport(userId!, dest);
+      },
     });
   }
   if (action === "incognito") {

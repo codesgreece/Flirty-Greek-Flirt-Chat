@@ -7,6 +7,9 @@ const schema = z.object({
   targetId: z.string().uuid(),
   kind: z.enum(["LIKE", "FLIRT", "SUPER_LIKE", "PASS"]),
   idempotencyKey: z.string().min(8).max(80).optional(),
+  focusType: z.enum(["photo", "prompt", "vibe"]).optional(),
+  focusLabel: z.string().max(80).optional(),
+  photoId: z.string().uuid().optional(),
 });
 
 export async function POST(req: NextRequest) {

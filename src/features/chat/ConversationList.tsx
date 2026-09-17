@@ -13,8 +13,9 @@ export type InboxRow = {
   id: string;
   lastMessageAt: string;
   unreadCount: number;
+  yourTurn?: boolean;
   lastMessage: { body: string; kind: string; senderId: string; createdAt: string } | null;
-  other: { id: string; name: string; verified: boolean; photo: string | null; online: boolean };
+  other: { id: string; name: string; verified: boolean; photo: string | null; online: boolean; lastActiveAt?: string };
 };
 
 export function ConversationList({ activeId }: { activeId?: string }) {
@@ -73,6 +74,8 @@ export function ConversationList({ activeId }: { activeId?: string }) {
                     <span className="grid h-5 min-w-5 place-items-center rounded-full bg-flirty-pink px-1 text-[10px] font-bold">
                       {row.unreadCount > 9 ? "9+" : row.unreadCount}
                     </span>
+                  ) : row.yourTurn ? (
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-flirty-pink">Your turn</span>
                   ) : null}
                 </div>
               </div>

@@ -6,7 +6,7 @@ import { readSession } from "@/server/auth/session";
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ key: string[] }> }) {
   const { key } = await ctx.params;
   const storageKey = key.join("/");
-  if (storageKey.startsWith("chat/")) {
+  if (storageKey.startsWith("chat/") || storageKey.startsWith("voice/")) {
     const session = await readSession();
     if (!session) return new Response("Not available", { status: 401 });
     const { canAccessMedia } = await import("@/server/messaging/service");
@@ -25,9 +25,16 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ key: strin
   }
   try {
     const file = await readStoredFile(storageKey);
+    const audio = storageKey.endsWith(".webm")
+      ? "audio/webm"
+      : storageKey.endsWith(".ogg")
+        ? "audio/ogg"
+        : storageKey.endsWith(".m4a")
+          ? "audio/mp4"
+          : "image/webp";
     return new Response(file, {
       headers: {
-        "Content-Type": "image/webp",
+        "Content-Type": audio,
         "Cache-Control": "public, max-age=3600",
       },
     });

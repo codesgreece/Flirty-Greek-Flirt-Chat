@@ -69,6 +69,10 @@ enum MessageKind {
   DIRECT_MESSAGE
   SYSTEM
   PHOTO
+  GIF
+  STICKER
+  VOICE
+  EPHEMERAL_PHOTO
 }
 
 enum CallState {
@@ -198,6 +202,12 @@ model User {
   dataExports        DataExport[]
   callsMade          CallSession[]     @relation("CallCaller")
   callsReceived      CallSession[]     @relation("CallCallee")
+  profileViewsMade   ProfileView[]     @relation("ViewViewer")
+  profileViewsRecv   ProfileView[]     @relation("ViewSubject")
+  recSignals         RecommendationSignal[]
+  spotlights         Spotlight[]
+  consumables        ConsumableBalance?
+  dateShares         DateShare[]
 
   @@index([status, lastActiveAt])
   @@index([createdAt])
@@ -211,6 +221,7 @@ model Profile {
   gender                Gender
   seeking               Gender[]
   bio                   String             @default("")
+  bioEn                 String             @default("")
   city                  String             @default("")
   country               String             @default("")
   region                String             @default("")
@@ -231,6 +242,18 @@ model Profile {
   incognito             Boolean            @default(false)
   showDistance          Boolean            @default(true)
   showOnline            Boolean            @default(true)
+  availability          String             @default("")
+  dailyVibeQuestion     String             @default("")
+  dailyVibeAnswer       String             @default("")
+  dailyVibeAt           DateTime?
+  voiceIntroKey         String?
+  voiceIntroMime        String?
+  voiceIntroMs          Int?
+  phoneE164             String             @default("")
+  phoneVerifiedAt       DateTime?
+  hideFromContacts      Boolean            @default(false)
+  smartPhotoOrder       Boolean            @default(true)
+  slowDiscover          Boolean            @default(false)
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -255,6 +278,7 @@ model ProfilePhoto {
   status        ModerationState @default(UPLOADED)
   width         Int?
   height        Int?
+  likeCount     Int             @default(0)
   createdAt     DateTime        @default(now())
   reviewedAt    DateTime?
 
@@ -309,6 +333,8 @@ model DatingPreference {
   intentions      DatingIntention[]
   verifiedOnly    Boolean @default(false)
   hasPhotosOnly   Boolean @default(true)
+  recentlyActive  Boolean @default(false)
+  dealbreakers    String[] @default([])
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -353,6 +379,9 @@ model Interaction {
   active         Boolean         @default(true)
   rewindable     Boolean         @default(true)
   idempotencyKey String?
+  focusType      String?
+  focusLabel     String?
+  secondChanceShown Boolean      @default(false)
   createdAt      DateTime        @default(now())
   undoneAt       DateTime?
 
@@ -438,6 +467,9 @@ model Message {
   mediaMime      String?
   mediaWidth     Int?
   mediaHeight    Int?
+  ephemeral      Boolean     @default(false)
+  viewedAt       DateTime?
+  durationMs     Int?
   createdAt      DateTime    @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?
@@ -849,6 +881,67 @@ model HiddenProfile {
   createdAt DateTime @default(now())
 
   @@unique([userId, hiddenId])
+}
+
+model ProfileView {
+  id        String   @id @default(uuid()) @db.Uuid
+  viewerId  String   @db.Uuid
+  subjectId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  viewer  User @relation("ViewViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  subject User @relation("ViewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([subjectId, createdAt])
+  @@index([viewerId, createdAt])
+}
+
+model RecommendationSignal {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  subjectId String   @db.Uuid
+  kind      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Spotlight {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  status    BoostStatus @default(ACTIVE)
+  startedAt DateTime    @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, expiresAt])
+}
+
+model ConsumableBalance {
+  userId        String @id @db.Uuid
+  superLikes    Int    @default(0)
+  firstMessages Int    @default(0)
+  boosts        Int    @default(0)
+  spotlights    Int    @default(0)
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DateShare {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  otherName   String
+  whenText    String
+  area        String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model RateLimitOverride {

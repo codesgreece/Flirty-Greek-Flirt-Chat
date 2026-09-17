@@ -9,6 +9,8 @@ import { createMatchIfMutual } from "@/server/matching/service";
 import { notify } from "@/server/notifications/service";
 import { track } from "@/server/analytics";
 import { getRedis } from "@/server/redis";
+import { consumeWallet } from "@/server/shop/service";
+import { recordSignal } from "@/server/discovery/engine";
 
 function pair(a: string, b: string) {
   return a < b ? [a, b] : [b, a];
@@ -19,6 +21,9 @@ export async function recordInteraction(input: {
   targetId: string;
   kind: InteractionKind;
   idempotencyKey?: string;
+  focusType?: string | null;
+  focusLabel?: string | null;
+  photoId?: string | null;
 }) {
   await assertNotBlocked(input.actorId, input.targetId);
   if (input.idempotencyKey) {
@@ -33,8 +38,14 @@ export async function recordInteraction(input: {
   if (input.kind === "FLIRT") await consumeUsage(input.actorId, "flirts");
   if (input.kind === "LIKE") await consumeUsage(input.actorId, "likes");
   if (input.kind === "SUPER_LIKE") {
-    await requireCapability(input.actorId, CAPABILITIES.SUPER_LIKES, "PLUS");
-    await consumeUsage(input.actorId, "super_likes");
+    const hasSuper = await hasCapability(input.actorId, CAPABILITIES.SUPER_LIKES);
+    if (!hasSuper) await requireCapability(input.actorId, CAPABILITIES.SUPER_LIKES, "PLUS");
+    try {
+      await consumeUsage(input.actorId, "super_likes");
+    } catch (error) {
+      const used = await consumeWallet(input.actorId, "superLikes");
+      if (!used) throw error;
+    }
   }
 
   const already = await prisma.interaction.findFirst({
@@ -50,10 +61,20 @@ export async function recordInteraction(input: {
       targetId: input.targetId,
       kind: input.kind,
       idempotencyKey: input.idempotencyKey,
+      focusType: input.focusType ?? null,
+      focusLabel: input.focusLabel ?? null,
     },
   });
 
+  if (input.photoId && input.kind !== "PASS") {
+    await prisma.profilePhoto.updateMany({
+      where: { id: input.photoId },
+      data: { likeCount: { increment: 1 } },
+    });
+  }
+
   await getRedis().sadd(`seen:${input.actorId}`, input.targetId);
+  void recordSignal(input.actorId, input.targetId, input.kind === "PASS" ? "LESS" : "MORE");
 
   let match = null;
   if (input.kind !== "PASS") {
@@ -77,7 +98,12 @@ export async function recordInteraction(input: {
     );
   }
 
-  const result = { duplicate: false, match, interactionId: interaction.id };
+  const result = {
+    duplicate: false,
+    match,
+    interactionId: interaction.id,
+    focusLabel: input.focusLabel ?? null,
+  };
   if (input.idempotencyKey) {
     await prisma.idempotencyKey.create({
       data: {

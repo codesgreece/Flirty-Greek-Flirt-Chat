@@ -10,6 +10,9 @@ import { logoutUser } from "@/server/auth/service";
 import { entitlementsForPlan, planForUser } from "@/server/entitlements/engine";
 import { usageSnapshot } from "@/server/usage/counters";
 import { ageFromDob } from "@/lib/dates";
+import { getWallet } from "@/server/shop/service";
+import { dailyVibeFor } from "@/lib/daily-vibe";
+import { lifestyleChips } from "@/lib/lifestyle";
 
 export const preferredRegion = ["fra1"];
 
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const session = await readSession();
   if (!session) return Response.json({ user: null });
-  const [user, plan, usage] = await Promise.all([
+  const [user, plan, usage, wallet] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: session.userId },
       include: {
@@ -62,6 +65,7 @@ export async function GET() {
         preference: true,
         adminProfile: true,
         boosts: { where: { status: "ACTIVE", expiresAt: { gt: new Date() } } },
+        spotlights: { where: { status: "ACTIVE", expiresAt: { gt: new Date() } } },
         passport: true,
         privacy: true,
         notificationPrefs: true,
@@ -69,6 +73,7 @@ export async function GET() {
     }),
     planForUser(session.userId),
     usageSnapshot(session.userId),
+    getWallet(session.userId),
   ]);
   const entitlements = entitlementsForPlan(plan);
   return Response.json({
@@ -85,7 +90,10 @@ export async function GET() {
             age: ageFromDob(user.profile.dateOfBirth),
             verified: user.profile.verificationStatus === "VERIFIED",
             verificationStatus: user.profile.verificationStatus,
+            emailVerified: Boolean(user.emailVerifiedAt),
+            phoneVerified: Boolean(user.profile.phoneVerifiedAt),
             bio: user.profile.bio,
+            bioEn: user.profile.bioEn,
             city: user.profile.city,
             intention: user.profile.datingIntention,
             gender: user.profile.gender,
@@ -108,6 +116,25 @@ export async function GET() {
             jobTitle: user.profile.jobTitle,
             education: user.profile.education,
             languages: user.profile.languages,
+            heightCm: user.profile.heightCm,
+            availability: user.profile.availability,
+            smartPhotoOrder: user.profile.smartPhotoOrder,
+            slowDiscover: user.profile.slowDiscover,
+            hideFromContacts: user.profile.hideFromContacts,
+            chips: lifestyleChips({
+              heightCm: user.profile.heightCm,
+              languages: user.profile.languages,
+              lifestyle:
+                user.profile.lifestyle && typeof user.profile.lifestyle === "object" && !Array.isArray(user.profile.lifestyle)
+                  ? (user.profile.lifestyle as Record<string, string>)
+                  : {},
+            }),
+            dailyVibeQuestion: dailyVibeFor(),
+            dailyVibeAnswer: user.profile.dailyVibeAnswer,
+            dailyVibeAt: user.profile.dailyVibeAt,
+            voiceIntro: user.profile.voiceIntroKey
+              ? { src: `/api/media/${user.profile.voiceIntroKey}`, durationMs: user.profile.voiceIntroMs ?? 0 }
+              : null,
             lifestyle:
               user.profile.lifestyle && typeof user.profile.lifestyle === "object" && !Array.isArray(user.profile.lifestyle)
                 ? (user.profile.lifestyle as Record<string, string>)
@@ -117,7 +144,9 @@ export async function GET() {
       preference: user.preference,
       entitlements,
       usage,
+      wallet,
       boost: user.boosts[0] ?? null,
+      spotlight: user.spotlights[0] ?? null,
       passport: user.passport,
       privacy: user.privacy,
       notificationPrefs: user.notificationPrefs,

@@ -2,6 +2,7 @@ import { DatingIntention, Gender, VibeCode } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { AppError } from "@/server/errors";
+import { dailyVibeFor } from "@/lib/daily-vibe";
 import { saveProfilePhoto } from "@/server/storage/local";
 import { audit } from "@/server/audit";
 
@@ -26,7 +27,17 @@ export const profileUpdateSchema = z.object({
   maxDistanceKm: z.number().int().min(1).max(500).optional(),
   verifiedOnly: z.boolean().optional(),
   hasPhotosOnly: z.boolean().optional(),
+  recentlyActive: z.boolean().optional(),
+  dealbreakers: z.array(z.string().max(40)).max(8).optional(),
   intentions: z.array(z.nativeEnum(DatingIntention)).max(5).optional(),
+  bioEn: z.string().max(500).optional(),
+  heightCm: z.number().int().min(120).max(230).nullable().optional(),
+  availability: z.string().max(40).optional(),
+  smartPhotoOrder: z.boolean().optional(),
+  slowDiscover: z.boolean().optional(),
+  hideFromContacts: z.boolean().optional(),
+  dailyVibeAnswer: z.string().max(140).optional(),
+  prompts: z.array(z.object({ question: z.string().max(120), answer: z.string().max(240) })).max(6).optional(),
 });
 
 export async function updateOwnProfile(userId: string, raw: unknown) {
@@ -56,6 +67,20 @@ export async function updateOwnProfile(userId: string, raw: unknown) {
       education: input.education,
       languages: input.languages,
       lifestyle,
+      bioEn: input.bioEn,
+      heightCm: input.heightCm === undefined ? undefined : input.heightCm,
+      availability: input.availability,
+      smartPhotoOrder: input.smartPhotoOrder,
+      slowDiscover: input.slowDiscover,
+      hideFromContacts: input.hideFromContacts,
+      prompts: input.prompts,
+      ...(input.dailyVibeAnswer != null
+        ? {
+            dailyVibeAnswer: input.dailyVibeAnswer,
+            dailyVibeQuestion: dailyVibeFor(),
+            dailyVibeAt: new Date(),
+          }
+        : {}),
     },
   });
   if (input.interests) {
@@ -79,6 +104,8 @@ export async function updateOwnProfile(userId: string, raw: unknown) {
     input.seeking ||
     input.verifiedOnly != null ||
     input.hasPhotosOnly != null ||
+    input.recentlyActive != null ||
+    input.dealbreakers ||
     input.intentions
   ) {
     await prisma.datingPreference.upsert({
@@ -91,6 +118,8 @@ export async function updateOwnProfile(userId: string, raw: unknown) {
         intentions: input.intentions,
         verifiedOnly: input.verifiedOnly,
         hasPhotosOnly: input.hasPhotosOnly,
+        recentlyActive: input.recentlyActive,
+        dealbreakers: input.dealbreakers,
       },
       create: {
         userId,
@@ -101,6 +130,8 @@ export async function updateOwnProfile(userId: string, raw: unknown) {
         intentions: input.intentions ?? [],
         verifiedOnly: input.verifiedOnly ?? false,
         hasPhotosOnly: input.hasPhotosOnly ?? true,
+        recentlyActive: input.recentlyActive ?? false,
+        dealbreakers: input.dealbreakers ?? [],
       },
     });
   }

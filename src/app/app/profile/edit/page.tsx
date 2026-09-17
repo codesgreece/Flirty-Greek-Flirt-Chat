@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useApp } from "@/components/providers/AppProviders";
 import { FlirtyButton } from "@/components/ui/FlirtyButton";
+import { DEALBREAKERS, LIFESTYLE_CHIPS, AVAILABILITY } from "@/lib/lifestyle";
+import { dailyVibeFor } from "@/lib/daily-vibe";
 
 const VIBES = ["CHILL", "ROMANTIC", "ADVENTUROUS", "FUNNY", "SOCIAL", "DEEP", "CREATIVE", "AMBITIOUS", "SPONTANEOUS"] as const;
 const INTENTIONS = ["CASUAL", "DATING", "RELATIONSHIP", "MARRIAGE", "FIGURING_IT_OUT"] as const;
@@ -41,6 +43,13 @@ export default function EditProfilePage() {
   const [photos, setPhotos] = useState<Photo[]>(me?.profile?.photos ?? []);
   const [lifestyle, setLifestyle] = useState<Record<string, string>>(me?.profile?.lifestyle ?? {});
   const [dragId, setDragId] = useState<string | null>(null);
+  const [bioEn, setBioEn] = useState(me?.profile?.bioEn ?? "");
+  const [heightCm, setHeightCm] = useState(me?.profile?.heightCm ? String(me?.profile?.heightCm) : "");
+  const [availability, setAvailability] = useState(me?.profile?.availability ?? "");
+  const [dealbreakers, setDealbreakers] = useState<string[]>(me?.preference?.dealbreakers ?? []);
+  const [smartOrder, setSmartOrder] = useState(me?.profile?.smartPhotoOrder ?? true);
+  const [slowDiscover, setSlowDiscover] = useState(me?.profile?.slowDiscover ?? false);
+  const [dailyAnswer, setDailyAnswer] = useState(me?.profile?.dailyVibeAnswer ?? "");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -56,6 +65,7 @@ export default function EditProfilePage() {
         body: JSON.stringify({
           displayName,
           bio,
+          bioEn,
           city,
           jobTitle,
           education,
@@ -70,6 +80,12 @@ export default function EditProfilePage() {
           maxDistanceKm: distance,
           lifestyle,
           intentions: lookingFor,
+          heightCm: heightCm ? Number(heightCm) : null,
+          availability,
+          dealbreakers,
+          smartPhotoOrder: smartOrder,
+          slowDiscover,
+          dailyVibeAnswer: dailyAnswer,
         }),
       });
       await refresh();
@@ -191,6 +207,9 @@ export default function EditProfilePage() {
         <h2 className="font-semibold">Βιογραφικό</h2>
         <textarea value={bio} maxLength={500} onChange={(e) => setBio(e.target.value)} className="mt-2 h-32 w-full rounded-2xl bg-white/5 px-4 py-3" />
         <p className="mt-1 text-right text-xs text-white/40">{bio.length} / 500</p>
+        <label className="mt-3 block text-sm">English bio
+          <textarea value={bioEn} maxLength={500} onChange={(e) => setBioEn(e.target.value)} className="mt-2 h-24 w-full rounded-2xl bg-white/5 px-4 py-3" />
+        </label>
       </section>
 
       <section className="grid gap-3">
@@ -316,6 +335,76 @@ export default function EditProfilePage() {
             />
           </label>
         ))}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-semibold">Lifestyle</h2>
+        <label className="text-sm">Height (cm)
+          <input value={heightCm} onChange={(e) => setHeightCm(e.target.value)} className="mt-1 w-full rounded-2xl bg-white/5 px-4 py-3" />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {AVAILABILITY.map((row) => (
+            <button key={row.id} type="button" onClick={() => setAvailability(row.id)} className={`rounded-full px-3 py-1 text-sm ${availability === row.id ? "bg-white text-black" : "bg-white/10"}`}>
+              {row.label}
+            </button>
+          ))}
+        </div>
+        {Object.entries(LIFESTYLE_CHIPS).map(([key, meta]) => (
+          <div key={key}>
+            <p className="text-sm text-white/60">{meta.label}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {meta.options.map((option) => (
+                <button key={option} type="button" onClick={() => setLifestyle({ ...lifestyle, [key]: option })} className={`rounded-full px-3 py-1 text-sm ${lifestyle[key] === option ? "bg-white text-black" : "bg-white/10"}`}>
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section>
+        <h2 className="font-semibold">Daily vibe</h2>
+        <p className="mt-1 text-sm text-white/60">{dailyVibeFor()}</p>
+        <input value={dailyAnswer} maxLength={140} onChange={(e) => setDailyAnswer(e.target.value)} className="mt-2 w-full rounded-2xl bg-white/5 px-4 py-3" placeholder="Your answer for 24 hours" />
+      </section>
+
+      <section>
+        <h2 className="font-semibold">Voice intro (15s)</h2>
+        <input
+          type="file"
+          accept="audio/webm,audio/mpeg,audio/mp4,audio/ogg,audio/wav"
+          className="mt-2 text-sm"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const form = new FormData();
+            form.set("file", file);
+            form.set("durationMs", "15000");
+            await api("/api/profiles?type=voice-intro", { method: "POST", body: form });
+            toast("Voice intro saved");
+          }}
+        />
+      </section>
+
+      <section>
+        <h2 className="font-semibold">Dealbreakers</h2>
+        <p className="text-sm text-white/50">Discover hides these quietly.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {DEALBREAKERS.map((row) => (
+            <button key={row.id} type="button" onClick={() => setDealbreakers((list) => list.includes(row.id) ? list.filter((v) => v !== row.id) : [...list, row.id])} className={`rounded-full px-3 py-1 text-sm ${dealbreakers.includes(row.id) ? "bg-rose-500" : "bg-white/10"}`}>
+              {row.label}
+            </button>
+          ))}
+        </div>
+        <label className="mt-3 flex items-center justify-between text-sm">
+          Smart photo order
+          <input type="checkbox" checked={smartOrder} onChange={(e) => setSmartOrder(e.target.checked)} />
+        </label>
+        <label className="mt-2 flex items-center justify-between text-sm">
+          Slow Discover
+          <input type="checkbox" checked={slowDiscover} onChange={(e) => setSlowDiscover(e.target.checked)} />
+        </label>
       </section>
 
       <FlirtyButton type="submit" className="w-full" loading={saving} disabled={saving}>

@@ -7,6 +7,9 @@ import { saveProfilePhoto } from "@/server/storage/local";
 import { deleteAccount, exportUserData } from "@/server/users/deletion";
 import { changePassword } from "@/server/auth/service";
 import { AppError } from "@/server/errors";
+import { submitSelfieVerification, requestPhoneCode, confirmPhoneCode } from "@/server/verify/service";
+import { shareMyDate, listDateShares } from "@/server/dateshare/service";
+import { dailyVibeFor } from "@/lib/daily-vibe";
 
 export async function GET(req: NextRequest) {
   const type = req.nextUrl.searchParams.get("type") ?? "notifications";
@@ -15,6 +18,8 @@ export async function GET(req: NextRequest) {
     csrf: false,
     handler: async ({ userId }) => {
       if (type === "export") return exportUserData(userId!);
+      if (type === "date-share") return listDateShares(userId!);
+      if (type === "daily-vibe") return { question: dailyVibeFor() };
       return listNotifications(userId!);
     },
   });
@@ -33,6 +38,18 @@ export async function POST(req: NextRequest) {
         if (!profile) throw new AppError("INVALID", "Finish onboarding first.", 400);
         if (!(file instanceof File)) throw new AppError("INVALID", "Choose a photo.", 400);
         return saveProfilePhoto(profile.id, file);
+      },
+    });
+  }
+  if (type === "selfie") {
+    const form = await req.formData();
+    const file = form.get("file");
+    return mutate({
+      auth: "user",
+      bucket: "verification",
+      handler: async ({ userId }) => {
+        if (!(file instanceof File)) throw new AppError("INVALID", "Upload a selfie to verify.", 400);
+        return submitSelfieVerification(userId!, file);
       },
     });
   }
@@ -101,10 +118,51 @@ export async function POST(req: NextRequest) {
     return mutate({
       auth: "user",
       bucket: "verification",
-      handler: async ({ userId }) => {
-        await prisma.verification.create({ data: { userId: userId!, status: "PENDING" } });
-        await prisma.profile.update({ where: { userId: userId! }, data: { verificationStatus: "PENDING" } });
-        return { status: "PENDING" };
+      handler: async () => {
+        throw new AppError("INVALID", "Upload a selfie to start verification.", 400);
+      },
+    });
+  }
+  if (type === "phone") {
+    return mutate({
+      auth: "user",
+      schema: z.object({ phone: z.string().min(8).max(20) }),
+      body,
+      handler: ({ userId, data }) => requestPhoneCode(userId!, (data as { phone: string }).phone),
+    });
+  }
+  if (type === "phone-confirm") {
+    return mutate({
+      auth: "user",
+      schema: z.object({ code: z.string().min(4).max(8) }),
+      body,
+      handler: ({ userId, data }) => confirmPhoneCode(userId!, (data as { code: string }).code),
+    });
+  }
+  if (type === "date-share") {
+    return mutate({
+      auth: "user",
+      schema: z.object({
+        otherName: z.string().min(1).max(80),
+        whenText: z.string().min(1).max(80),
+        area: z.string().min(1).max(80),
+      }),
+      body,
+      handler: ({ userId, data }) =>
+        shareMyDate(userId!, data as { otherName: string; whenText: string; area: string }),
+    });
+  }
+  if (type === "hide-contacts") {
+    return mutate({
+      auth: "user",
+      schema: z.object({ hideFromContacts: z.boolean() }),
+      body,
+      handler: async ({ userId, data }) => {
+        await prisma.profile.update({
+          where: { userId: userId! },
+          data: { hideFromContacts: (data as { hideFromContacts: boolean }).hideFromContacts },
+        });
+        return { hideFromContacts: (data as { hideFromContacts: boolean }).hideFromContacts };
       },
     });
   }

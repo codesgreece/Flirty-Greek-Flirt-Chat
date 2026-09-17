@@ -14,16 +14,23 @@ type PublicProfile = {
   name: string;
   age: number;
   verified: boolean;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
   bio: string;
+  bioEn?: string;
   city: string;
   jobTitle: string;
   education: string;
   languages: string[];
+  chips?: string[];
+  availability?: string;
+  dailyVibe?: { question: string; answer: string } | null;
+  voiceIntro?: { src: string; durationMs: number } | null;
   intention: string;
   interests: string[];
   vibes: string[];
   photos: { id: string; src: string }[];
-  compatibility: { score: number };
+  compatibility: { score: number; interests?: number; vibe?: number; intent?: number };
   liked: boolean;
   matched: boolean;
   conversationId: string | null;
@@ -119,8 +126,18 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
         <p className="text-3xl font-bold">
           {profile.name}, {profile.age} {profile.verified ? <span className="text-indigo-300">✓</span> : null}
         </p>
-        <p className="text-sm text-flirty-pink">{profile.compatibility.score}% Vibe Match</p>
-        <p className="text-sm text-white/60">{profile.city} · {formatIntention(profile.intention)}</p>
+        <p className="text-sm text-flirty-pink">{profile.compatibility.score}% overall</p>
+        {profile.compatibility.interests != null ? (
+          <p className="text-xs text-white/50">
+            Interests {profile.compatibility.interests}% · Vibe {profile.compatibility.vibe}% · Intention {profile.compatibility.intent}%
+          </p>
+        ) : null}
+        <p className="text-xs text-white/50">
+          {profile.verified ? "Selfie verified" : "Not selfie verified"}
+          {profile.emailVerified ? " · Email" : ""}
+          {profile.phoneVerified ? " · Phone" : ""}
+        </p>
+        <p className="text-sm text-white/60">{profile.city} · {formatIntention(profile.intention)}{profile.availability ? ` · ${profile.availability}` : ""}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <FlirtyButton type="button" onClick={like} disabled={profile.liked}>
@@ -142,7 +159,13 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
         <p className="text-xs text-white/50">Like each other to unlock chat, or upgrade to Platinum for a first message.</p>
       ) : null}
       <p className="text-white/80">{profile.bio}</p>
+      {profile.bioEn ? <p className="text-sm text-white/60">{profile.bioEn}</p> : null}
+      {profile.dailyVibe ? <p className="rounded-2xl bg-indigo-500/20 px-4 py-3 text-sm">Today: {profile.dailyVibe.answer}</p> : null}
+      {profile.voiceIntro ? <audio className="w-full" controls src={profile.voiceIntro.src} /> : null}
       <div className="flex flex-wrap gap-2">
+        {profile.chips?.map((chip) => (
+          <span key={chip} className="rounded-full bg-white/10 px-3 py-1 text-xs">{chip}</span>
+        ))}
         {profile.interests.map((i) => (
           <span key={i} className="rounded-full bg-white/10 px-3 py-1 text-xs">{i}</span>
         ))}

@@ -15,6 +15,7 @@ import {
   getTyping,
   muteConversation,
   setPresence,
+  viewEphemeral,
 } from "@/server/messaging/service";
 import { listMatches, unmatch } from "@/server/matching/service";
 import { AppError } from "@/server/errors";
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
     const conversationId = String(form.get("conversationId") ?? "");
     const clientId = String(form.get("clientId") ?? crypto.randomUUID());
     const caption = String(form.get("body") ?? "");
+    const ephemeral = String(form.get("ephemeral") ?? "") === "1";
     return mutate({
       auth: "user",
       bucket: "upload",
@@ -69,6 +71,29 @@ export async function POST(req: NextRequest) {
           clientId,
           body: caption,
           file,
+          ephemeral,
+        });
+      },
+    });
+  }
+  if (type === "voice") {
+    const form = await req.formData();
+    const file = form.get("file");
+    const conversationId = String(form.get("conversationId") ?? "");
+    const clientId = String(form.get("clientId") ?? crypto.randomUUID());
+    const durationMs = Number(form.get("durationMs") ?? 0);
+    return mutate({
+      auth: "user",
+      bucket: "upload",
+      handler: ({ userId }) => {
+        if (!(file instanceof File)) throw new AppError("INVALID", "Record a voice note first.", 400);
+        return sendChatMessage({
+          senderId: userId!,
+          conversationId,
+          clientId,
+          kind: "VOICE",
+          file,
+          durationMs,
         });
       },
     });
@@ -117,6 +142,14 @@ export async function POST(req: NextRequest) {
         muteConversation(userId!, (data as { conversationId: string }).conversationId, (data as { muted: boolean }).muted),
     });
   }
+  if (type === "view") {
+    return mutate({
+      auth: "user",
+      schema: z.object({ messageId: z.string().uuid() }),
+      body,
+      handler: ({ userId, data }) => viewEphemeral(userId!, (data as { messageId: string }).messageId),
+    });
+  }
   if (type === "call-start") {
     return mutate({
       auth: "user",
@@ -159,10 +192,19 @@ export async function POST(req: NextRequest) {
       body: z.string().max(2000).optional(),
       clientId: z.string().min(4),
       replyToId: z.string().uuid().optional(),
+      gifUrl: z.string().url().optional(),
+      stickerId: z.string().max(40).optional(),
     }),
     body,
     handler: ({ userId, data }) => {
-      const payload = data as { conversationId: string; body?: string; clientId: string; replyToId?: string };
+      const payload = data as {
+        conversationId: string;
+        body?: string;
+        clientId: string;
+        replyToId?: string;
+        gifUrl?: string;
+        stickerId?: string;
+      };
       return sendChatMessage({ senderId: userId!, ...payload });
     },
   });

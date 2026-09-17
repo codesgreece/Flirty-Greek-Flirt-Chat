@@ -25,7 +25,12 @@ export default function ProfilePage() {
       </button>
       <div>
         <p className="text-3xl font-bold">
-          {me.profile.name}, {me.profile.age} {me.profile.verified ? <span className="text-indigo-300">✓</span> : null}
+          {me.profile.name}, {me.profile.age}         {me.profile.verified ? <span className="text-indigo-300">✓</span> : null}
+        </p>
+        <p className="text-xs text-white/45">
+          {me.profile.verified ? "Selfie verified" : "Not selfie verified"}
+          {me.profile.emailVerified ? " · Email verified" : ""}
+          {me.profile.phoneVerified ? " · Phone verified" : ""}
         </p>
         <p className="text-sm text-white/60">
           {me.profile.city} · {me.entitlements.plan}
@@ -40,8 +45,17 @@ export default function ProfilePage() {
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-white/45">Bio</h2>
           <p className="mt-2 text-white/80">{me.profile.bio}</p>
+          {me.profile.bioEn ? <p className="mt-2 text-sm text-white/60">{me.profile.bioEn}</p> : null}
         </section>
       ) : null}
+      {me.profile.chips?.length ? (
+        <div className="flex flex-wrap gap-2">
+          {me.profile.chips.map((chip) => (
+            <span key={chip} className="rounded-full bg-white/10 px-3 py-1 text-xs">{chip}</span>
+          ))}
+        </div>
+      ) : null}
+      {me.profile.voiceIntro ? <audio className="w-full" controls src={me.profile.voiceIntro.src} /> : null}
       {me.profile.interests.length ? (
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-white/45">Interests</h2>
@@ -77,7 +91,8 @@ export default function ProfilePage() {
         <Link href="/app/settings" className="rounded-2xl bg-white/5 px-4 py-4">Account Settings</Link>
         <Link href="/app/settings" className="rounded-2xl bg-white/5 px-4 py-4">Privacy & Safety</Link>
         <Link href="/app/settings" className="rounded-2xl bg-white/5 px-4 py-4 text-rose-300">Delete Account</Link>
-        <Link href="/pricing" className="rounded-2xl bg-white/5 px-4 py-4">Subscription</Link>
+        <Link href="/app/views" className="rounded-2xl bg-white/5 px-4 py-4">Who viewed you</Link>
+        <Link href="/pricing" className="rounded-2xl bg-white/5 px-4 py-4">Subscription & shop</Link>
         {me.isAdmin ? <Link href="/admin" className="rounded-2xl bg-white/5 px-4 py-4">Admin control center</Link> : null}
         <FlirtyButton
           type="button"

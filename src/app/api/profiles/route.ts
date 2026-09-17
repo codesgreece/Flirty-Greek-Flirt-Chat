@@ -13,6 +13,9 @@ import {
   reorderProfilePhotos,
   updateOwnProfile,
 } from "@/server/profiles/service";
+import { recordProfileView } from "@/server/views/service";
+import { saveVoiceIntro } from "@/server/storage/local";
+import { lifestyleChips, lifestyleRecord, availabilityLabel } from "@/lib/lifestyle";
 
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get("userId");
@@ -35,6 +38,11 @@ export async function GET(req: NextRequest) {
         },
       });
       if (!profile) throw new AppError("NOT_FOUND", "Profile unavailable.", 404);
+      if (viewerId !== userId) void recordProfileView(viewerId!, userId);
+      const vibeFresh =
+        profile.dailyVibeAnswer &&
+        profile.dailyVibeAt &&
+        Date.now() - profile.dailyVibeAt.getTime() < 24 * 60 * 60 * 1000;
       const [compat, convo, liked, canFirstMessage] = await Promise.all([
         getCompatibility(viewerId!, userId),
         conversationWith(viewerId!, userId),
@@ -48,12 +56,26 @@ export async function GET(req: NextRequest) {
         name: profile.displayName,
         age: ageFromDob(profile.dateOfBirth),
         verified: profile.verificationStatus === "VERIFIED",
+        emailVerified: Boolean(profile.user.emailVerifiedAt),
+        phoneVerified: Boolean(profile.phoneVerifiedAt),
         bio: profile.bio,
+        bioEn: profile.bioEn,
         city: profile.city,
         jobTitle: profile.jobTitle,
         education: profile.education,
         languages: profile.languages,
         lifestyle: profile.lifestyle,
+        heightCm: profile.heightCm,
+        chips: lifestyleChips({
+          heightCm: profile.heightCm,
+          languages: profile.languages,
+          lifestyle: lifestyleRecord(profile.lifestyle),
+        }),
+        availability: availabilityLabel(profile.availability),
+        dailyVibe: vibeFresh ? { question: profile.dailyVibeQuestion, answer: profile.dailyVibeAnswer } : null,
+        voiceIntro: profile.voiceIntroKey
+          ? { src: `/api/media/${profile.voiceIntroKey}`, durationMs: profile.voiceIntroMs ?? 0 }
+          : null,
         gender: profile.gender,
         seeking: profile.seeking,
         intention: profile.datingIntention,
@@ -105,6 +127,25 @@ export async function POST(req: NextRequest) {
           src: `/api/media/${photo.mediumKey}`,
           thumb: `/api/media/${photo.thumbKey}`,
         };
+      },
+    });
+  }
+  if (type === "voice-intro") {
+    const form = await req.formData();
+    const file = form.get("file");
+    const durationMs = Number(form.get("durationMs") ?? 0);
+    return mutate({
+      auth: "user",
+      bucket: "upload",
+      handler: async ({ userId }) => {
+        if (!(file instanceof File)) throw new AppError("INVALID", "Record a 15 second intro.", 400);
+        if (durationMs > 15_000) throw new AppError("INVALID", "Voice intros can be 15 seconds.", 400);
+        const saved = await saveVoiceIntro(userId!, file);
+        await prisma.profile.update({
+          where: { userId: userId! },
+          data: { voiceIntroKey: saved.mediaKey, voiceIntroMime: saved.mediaMime, voiceIntroMs: durationMs || 15000 },
+        });
+        return { src: `/api/media/${saved.mediaKey}`, durationMs };
       },
     });
   }

@@ -5,13 +5,15 @@ import { assertNotBlocked } from "@/server/safety/service";
 import { notify } from "@/server/notifications/service";
 import { track } from "@/server/analytics";
 import { consumeUsage } from "@/server/usage/counters";
+import { saveChatImage, saveVoiceNote } from "@/server/storage/local";
+import { conversationWith } from "@/server/matching/service";
+import { ageFromDob } from "@/lib/dates";
+import { isAllowedGifUrl, STICKERS } from "@/lib/stickers";
 import { hasCapability, requireCapability } from "@/server/entitlements/engine";
 import { CAPABILITIES } from "@/server/entitlements/catalog";
 import { getRedis } from "@/server/redis";
 import { recordChatActivity, getCallUnlock } from "@/server/chat/streak";
-import { saveChatImage } from "@/server/storage/local";
-import { conversationWith } from "@/server/matching/service";
-import { ageFromDob } from "@/lib/dates";
+import { consumeWallet } from "@/server/shop/service";
 
 const ONLINE_MS = 2 * 60_000;
 
@@ -41,7 +43,11 @@ export async function sendDirectMessage(input: {
       conversationId: matched.id,
     });
   }
-  await requireCapability(input.senderId, CAPABILITIES.FIRST_MESSAGE, "PLATINUM");
+  const canFirst = await hasCapability(input.senderId, CAPABILITIES.FIRST_MESSAGE);
+  if (!canFirst) {
+    const used = await consumeWallet(input.senderId, "firstMessages");
+    if (!used) await requireCapability(input.senderId, CAPABILITIES.FIRST_MESSAGE, "PLATINUM");
+  }
   if (input.idempotencyKey) {
     const hit = await prisma.idempotencyKey.findUnique({
       where: { userId_route_key: { userId: input.senderId, route: "dm", key: input.idempotencyKey } },
@@ -109,12 +115,18 @@ export async function incomingDirectMessages(userId: string) {
   });
 }
 
-async function requireConversation(userId: string, conversationId: string) {
+async function requireConversation(userId: string, conversationId: string, allowInactive = false) {
   const convo = await prisma.conversation.findFirst({
     where: { id: conversationId, OR: [{ userAId: userId }, { userBId: userId }] },
     include: { match: true },
   });
-  if (!convo || !convo.match.active) throw new AppError("NOT_FOUND", "Conversation unavailable.", 404);
+  if (!convo) throw new AppError("NOT_FOUND", "Conversation unavailable.", 404);
+  if (!convo.match.active && !allowInactive) {
+    throw new AppError("UNMATCHED", "They unmatched you", 410, {
+      unmatched: true,
+      theyUnmatched: convo.match.unmatchedBy !== userId,
+    });
+  }
   return convo;
 }
 
@@ -126,6 +138,10 @@ export async function sendChatMessage(input: {
   replyToId?: string;
   kind?: MessageKind;
   file?: File;
+  gifUrl?: string;
+  stickerId?: string;
+  ephemeral?: boolean;
+  durationMs?: number;
 }) {
   const convo = await requireConversation(input.senderId, input.conversationId);
   const other = convo.userAId === input.senderId ? convo.userBId : convo.userAId;
@@ -138,24 +154,43 @@ export async function sendChatMessage(input: {
       where: { id: existing.id },
       include: { reactions: true, replyTo: { select: { id: true, body: true, senderId: true, kind: true } } },
     });
-    return serializeMessage(full ?? existing);
+    return serializeMessage(full ?? existing, input.senderId);
   }
-  let media:
-    | {
-        kind: MessageKind;
-        body: string;
-        mediaKey?: string;
-        mediaThumbKey?: string;
-        mediaMime?: string;
-        mediaWidth?: number;
-        mediaHeight?: number;
-      }
-    | undefined;
-  if (input.file) {
+  let media: {
+    kind: MessageKind;
+    body: string;
+    mediaKey?: string;
+    mediaThumbKey?: string;
+    mediaMime?: string;
+    mediaWidth?: number;
+    mediaHeight?: number;
+    ephemeral?: boolean;
+    durationMs?: number;
+  };
+  if (input.stickerId) {
+    const sticker = STICKERS.find((row) => row.id === input.stickerId);
+    if (!sticker) throw new AppError("INVALID", "That sticker is not available.", 400);
+    media = { kind: "STICKER", body: sticker.emoji };
+  } else if (input.gifUrl) {
+    if (!isAllowedGifUrl(input.gifUrl)) throw new AppError("INVALID", "That GIF source is not allowed.", 400);
+    media = { kind: "GIF", body: input.gifUrl };
+  } else if (input.file && input.kind === "VOICE") {
+    if ((input.durationMs ?? 0) > 30_000) throw new AppError("INVALID", "Voice notes can be 30 seconds.", 400);
+    const saved = await saveVoiceNote(`chat/${input.conversationId}`, input.file);
+    media = {
+      kind: "VOICE",
+      body: "",
+      mediaKey: saved.mediaKey,
+      mediaMime: saved.mediaMime,
+      durationMs: input.durationMs ?? 0,
+    };
+  } else if (input.file) {
+    if (input.ephemeral) await requireCapability(input.senderId, CAPABILITIES.EPHEMERAL_PHOTO, "GOLD");
     const saved = await saveChatImage(input.conversationId, input.file);
     media = {
-      kind: "PHOTO",
+      kind: input.ephemeral ? "EPHEMERAL_PHOTO" : "PHOTO",
       body: input.body?.trim().slice(0, 500) ?? "",
+      ephemeral: Boolean(input.ephemeral),
       ...saved,
     };
   } else {
@@ -183,6 +218,8 @@ export async function sendChatMessage(input: {
       mediaMime: media.mediaMime,
       mediaWidth: media.mediaWidth,
       mediaHeight: media.mediaHeight,
+      ephemeral: Boolean(media.ephemeral),
+      durationMs: media.durationMs,
     },
     include: { reactions: true, replyTo: { select: { id: true, body: true, senderId: true, kind: true } } },
   });
@@ -191,45 +228,74 @@ export async function sendChatMessage(input: {
     data: { lastMessageAt: new Date() },
   });
   void recordChatActivity(convo.id, input.senderId);
+  const preview =
+    media.kind === "PHOTO" || media.kind === "EPHEMERAL_PHOTO"
+      ? "Sent a photo"
+      : media.kind === "GIF"
+        ? "Sent a GIF"
+        : media.kind === "STICKER"
+          ? "Sent a sticker"
+          : media.kind === "VOICE"
+            ? "Sent a voice note"
+            : media.body.slice(0, 80);
   await notify({
     userId: other,
     kind: "MESSAGE",
     title: "New message",
-    body: media.kind === "PHOTO" ? "Sent a photo" : media.body.slice(0, 80),
+    body: preview,
     payload: { conversationId: convo.id },
   });
-  await track("message_sent", input.senderId);
-  return serializeMessage(message);
+  await track("message_sent", input.senderId, { kind: media.kind });
+  return serializeMessage(message, input.senderId);
 }
 
-function serializeMessage(message: {
-  id: string;
-  conversationId?: string;
-  senderId: string;
-  kind: MessageKind;
-  body: string;
-  clientId: string | null;
-  createdAt: Date;
-  editedAt: Date | null;
-  deletedAt: Date | null;
-  readAt: Date | null;
-  deliveredAt?: Date | null;
-  replyToId?: string | null;
-  mediaKey?: string | null;
-  mediaThumbKey?: string | null;
-  mediaMime?: string | null;
-  mediaWidth?: number | null;
-  mediaHeight?: number | null;
-  reactions?: { emoji: string; userId: string }[];
-  replyTo?: { id: string; body: string; senderId: string; kind: MessageKind } | null;
-}) {
+function previewBody(kind: MessageKind, body: string) {
+  if (kind === "PHOTO") return "Photo";
+  if (kind === "EPHEMERAL_PHOTO") return "Photo · 1 view";
+  if (kind === "GIF") return "GIF";
+  if (kind === "STICKER") return body || "Sticker";
+  if (kind === "VOICE") return "Voice note";
+  return body;
+}
+
+function serializeMessage(
+  message: {
+    id: string;
+    conversationId?: string;
+    senderId: string;
+    kind: MessageKind;
+    body: string;
+    clientId: string | null;
+    createdAt: Date;
+    editedAt: Date | null;
+    deletedAt: Date | null;
+    readAt: Date | null;
+    deliveredAt?: Date | null;
+    replyToId?: string | null;
+    mediaKey?: string | null;
+    mediaThumbKey?: string | null;
+    mediaMime?: string | null;
+    mediaWidth?: number | null;
+    mediaHeight?: number | null;
+    ephemeral?: boolean;
+    viewedAt?: Date | null;
+    durationMs?: number | null;
+    reactions?: { emoji: string; userId: string }[];
+    replyTo?: { id: string; body: string; senderId: string; kind: MessageKind } | null;
+  },
+  viewerId?: string,
+) {
   const status = message.readAt ? "read" : message.deliveredAt ? "delivered" : "sent";
+  const ephemeralLocked =
+    (message.kind === "EPHEMERAL_PHOTO" || message.ephemeral) &&
+    Boolean(message.viewedAt) &&
+    viewerId !== message.senderId;
   return {
     id: message.id,
     conversationId: message.conversationId,
     senderId: message.senderId,
     kind: message.kind,
-    body: message.deletedAt ? "" : message.body,
+    body: message.deletedAt || ephemeralLocked ? "" : message.body,
     clientId: message.clientId,
     createdAt: message.createdAt,
     editedAt: message.editedAt,
@@ -240,14 +306,24 @@ function serializeMessage(message: {
     replyTo: message.replyTo ?? null,
     status,
     reactions: message.reactions ?? [],
-    photo: message.mediaKey
-      ? {
-          src: photoUrl(message.mediaKey),
-          thumb: photoUrl(message.mediaThumbKey ?? message.mediaKey),
-          width: message.mediaWidth,
-          height: message.mediaHeight,
-        }
+    ephemeral: Boolean(message.ephemeral || message.kind === "EPHEMERAL_PHOTO"),
+    viewed: Boolean(message.viewedAt),
+    durationMs: message.durationMs ?? null,
+    gifUrl: message.kind === "GIF" && !message.deletedAt ? message.body : null,
+    sticker: message.kind === "STICKER" ? message.body : null,
+    voice: message.kind === "VOICE" && message.mediaKey && !message.deletedAt
+      ? { src: photoUrl(message.mediaKey), durationMs: message.durationMs ?? 0 }
       : null,
+    photo:
+      message.mediaKey && !ephemeralLocked && (message.kind === "PHOTO" || message.kind === "EPHEMERAL_PHOTO")
+        ? {
+            src: photoUrl(message.mediaKey),
+            thumb: photoUrl(message.mediaThumbKey ?? message.mediaKey),
+            width: message.mediaWidth,
+            height: message.mediaHeight,
+            ephemeral: message.kind === "EPHEMERAL_PHOTO",
+          }
+        : null,
   };
 }
 
@@ -289,12 +365,13 @@ export async function listConversations(userId: string) {
         unreadCount: unread,
         lastMessage: last
           ? {
-              body: last.kind === "PHOTO" ? "Photo" : last.body,
+              body: previewBody(last.kind, last.body),
               kind: last.kind,
               senderId: last.senderId,
               createdAt: last.createdAt,
             }
           : null,
+        yourTurn: Boolean(last && last.senderId !== userId),
         other: {
           id: other.id,
           name: other.profile?.displayName ?? "Someone",
@@ -309,8 +386,10 @@ export async function listConversations(userId: string) {
 }
 
 export async function conversationMeta(userId: string, conversationId: string) {
-  const convo = await requireConversation(userId, conversationId);
+  const convo = await requireConversation(userId, conversationId, true);
   const otherId = convo.userAId === userId ? convo.userBId : convo.userAId;
+  const unmatched = !convo.match.active;
+  const theyUnmatched = unmatched && convo.match.unmatchedBy !== userId;
   const [other, unlock, presence] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: otherId },
@@ -334,6 +413,14 @@ export async function conversationMeta(userId: string, conversationId: string) {
     matchId: convo.matchId,
     muted: convo.userAId === userId ? convo.mutedByA : convo.mutedByB,
     call: unlock,
+    meet: {
+      unlocked: unlock.unlocked,
+      remaining: unlock.remaining,
+      prompt: "Want to meet this week?",
+    },
+    unmatched,
+    theyUnmatched,
+    composerLocked: unmatched,
     other: {
       id: other.id,
       name: other.profile?.displayName ?? "Someone",
@@ -357,7 +444,7 @@ export async function conversationMeta(userId: string, conversationId: string) {
 }
 
 export async function listMessages(userId: string, conversationId: string, cursor?: string) {
-  await requireConversation(userId, conversationId);
+  await requireConversation(userId, conversationId, true);
   const messages = await prisma.message.findMany({
     where: {
       conversationId,
@@ -375,7 +462,7 @@ export async function listMessages(userId: string, conversationId: string, curso
     where: { conversationId, senderId: { not: userId }, deliveredAt: null },
     data: { deliveredAt: new Date() },
   });
-  return messages.reverse().map(serializeMessage);
+  return messages.reverse().map((row) => serializeMessage(row, userId));
 }
 
 export async function markConversationRead(userId: string, conversationId: string) {
@@ -430,7 +517,8 @@ export async function setTyping(conversationId: string, userId: string, typing: 
 }
 
 export async function getTyping(conversationId: string, userId: string) {
-  const convo = await requireConversation(userId, conversationId);
+  const convo = await requireConversation(userId, conversationId, true);
+  if (!convo.match.active) return { typing: false, userId: convo.userAId === userId ? convo.userBId : convo.userAId };
   const other = convo.userAId === userId ? convo.userBId : convo.userAId;
   const stamped = convo.userAId === userId ? convo.typingBAt : convo.typingAAt;
   const fresh = Boolean(stamped && Date.now() - stamped.getTime() < 6000);
@@ -455,8 +543,31 @@ export async function muteConversation(userId: string, conversationId: string, m
   return { muted };
 }
 
+export async function viewEphemeral(userId: string, messageId: string) {
+  const message = await prisma.message.findUnique({ where: { id: messageId }, include: { conversation: true } });
+  if (!message) throw new AppError("NOT_FOUND", "Message unavailable.", 404);
+  if (message.conversation.userAId !== userId && message.conversation.userBId !== userId) {
+    throw new AppError("FORBIDDEN", "You cannot open that.", 403);
+  }
+  if (message.kind !== "EPHEMERAL_PHOTO" && !message.ephemeral) {
+    return serializeMessage(message, userId);
+  }
+  if (message.senderId === userId) return serializeMessage(message, userId);
+  if (!message.viewedAt) {
+    await prisma.message.update({ where: { id: message.id }, data: { viewedAt: new Date() } });
+  }
+  return serializeMessage({ ...message, viewedAt: message.viewedAt ?? new Date() }, userId);
+}
+
 export async function canAccessMedia(userId: string, key: string) {
-  if (!key.startsWith("chat/")) return true;
+  if (!key.startsWith("chat/") && !key.startsWith("voice/")) return true;
+  if (key.startsWith("voice/")) {
+    const owner = key.split("/")[1];
+    if (!owner) return false;
+    return owner === userId || Boolean(await prisma.conversation.findFirst({
+      where: { OR: [{ userAId: userId, userBId: owner }, { userAId: owner, userBId: userId }] },
+    }));
+  }
   const parts = key.split("/");
   const conversationId = parts[1];
   if (!conversationId) return false;

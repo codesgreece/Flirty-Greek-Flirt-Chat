@@ -17,6 +17,7 @@ export type Me = {
     age: number;
     verified: boolean;
     bio: string;
+    bioEn?: string;
     city: string;
     intention: string;
     gender?: string;
@@ -26,11 +27,23 @@ export type Me = {
     interestSlugs?: string[];
     vibes: string[];
     vibeCodes?: string[];
+    prompts?: { question: string; answer: string }[] | unknown;
     incognito: boolean;
     jobTitle?: string;
     education?: string;
     languages?: string[];
     lifestyle?: Record<string, string>;
+    heightCm?: number | null;
+    chips?: string[];
+    availability?: string;
+    smartPhotoOrder?: boolean;
+    slowDiscover?: boolean;
+    hideFromContacts?: boolean;
+    emailVerified?: boolean;
+    phoneVerified?: boolean;
+    dailyVibeQuestion?: string;
+    dailyVibeAnswer?: string;
+    voiceIntro?: { src: string; durationMs: number } | null;
   } | null;
   preference?: {
     minAge: number;
@@ -40,6 +53,8 @@ export type Me = {
     intentions?: string[];
     verifiedOnly?: boolean;
     hasPhotosOnly?: boolean;
+    recentlyActive?: boolean;
+    dealbreakers?: string[];
   } | null;
   entitlements: {
     plan: "FREE" | "PLUS" | "GOLD" | "PLATINUM";
@@ -47,12 +62,15 @@ export type Me = {
     limits: Record<string, unknown>;
   };
   usage: Record<string, { used: number; limit: number | null }>;
+  wallet?: { superLikes: number; firstMessages: number; boosts: number; spotlights: number };
   privacy: {
     showDistance: boolean;
     showOnline: boolean;
     discoveryVisible: boolean;
   } | null;
   boost: { expiresAt: string } | null;
+  spotlight?: { expiresAt: string } | null;
+  passport?: { city: string; country: string; active: boolean } | null;
 };
 
 type AppCtx = {

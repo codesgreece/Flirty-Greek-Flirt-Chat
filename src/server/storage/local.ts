@@ -90,6 +90,23 @@ export async function saveChatImage(conversationId: string, file: File) {
   };
 }
 
+export async function saveVoiceNote(prefix: string, file: File) {
+  const allowed = new Set(["audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-m4a"]);
+  if (!allowed.has(file.type)) throw new AppError("INVALID", "Use a short voice clip.", 400);
+  if (file.size > 2 * 1024 * 1024) throw new AppError("INVALID", "Voice notes must stay under 2MB.", 400);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const id = randomBytes(16).toString("hex");
+  const ext = file.type.includes("mpeg") || file.type.includes("mp4") || file.type.includes("m4a") ? "m4a" : file.type.includes("ogg") ? "ogg" : "webm";
+  const key = `${prefix}/${id}.${ext}`;
+  await mkdir(path.join(storageRoot(), prefix), { recursive: true });
+  await writeFile(path.join(storageRoot(), key), buffer);
+  return { mediaKey: key, mediaMime: file.type };
+}
+
+export async function saveVoiceIntro(userId: string, file: File) {
+  return saveVoiceNote(`voice/${userId}`, file);
+}
+
 export async function writePublicAvatarPng(fileName: string, png: Buffer) {
   const dest = path.join(process.cwd(), "public", "avatars", fileName);
   await mkdir(path.dirname(dest), { recursive: true });

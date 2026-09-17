@@ -9,16 +9,22 @@ export function MatchModal({
   score,
   photo,
   myPhoto,
+  icebreakers = [],
+  breakdown,
   onKeep,
   onMessage,
+  onUseLine,
 }: {
   open: boolean;
   name: string;
   score: number;
   photo?: string;
   myPhoto?: string;
+  icebreakers?: string[];
+  breakdown?: { interests: number; vibe: number; intent: number; overall?: number };
   onKeep: () => void;
   onMessage: () => void;
+  onUseLine?: (line: string) => void;
 }) {
   return (
     <AnimatePresence>
@@ -49,8 +55,33 @@ export function MatchModal({
             </motion.h2>
             <p className="mt-2 text-white/70">You both liked each other.</p>
             <motion.p className="mt-1 text-flirty-pink" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
-              {score}% Vibe Match · {name}
+              {score}% overall · {name}
             </motion.p>
+            {breakdown ? (
+              <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] text-white/70">
+                <p>Interests {breakdown.interests}%</p>
+                <p>Vibe {breakdown.vibe}%</p>
+                <p>Intention {breakdown.intent}%</p>
+              </div>
+            ) : null}
+            {icebreakers.length ? (
+              <div className="mt-5 space-y-2 text-left">
+                <p className="text-center text-xs uppercase tracking-wide text-white/45">Start with this, not hey</p>
+                {icebreakers.map((line) => (
+                  <button
+                    key={line}
+                    type="button"
+                    className="w-full rounded-2xl bg-white/10 px-4 py-3 text-left text-sm"
+                    onClick={() => {
+                      onUseLine?.(line);
+                      onMessage();
+                    }}
+                  >
+                    {line}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <motion.div className="mt-8 flex flex-col gap-3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
               <FlirtyButton type="button" onClick={onMessage}>
                 Send Message

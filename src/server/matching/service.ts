@@ -2,6 +2,7 @@ import { prisma } from "@/server/db";
 import { notify } from "@/server/notifications/service";
 import { track } from "@/server/analytics";
 import { getCompatibility } from "@/server/compatibility/service";
+import { icebreakers } from "@/lib/icebreakers";
 
 function ordered(a: string, b: string) {
   return a < b ? { lowUserId: a, highUserId: b } : { lowUserId: b, highUserId: a };
@@ -51,7 +52,42 @@ export async function createMatchIfMutual(a: string, b: string, origin: string) 
     payload: { matchId: match.id, score: score.score, conversationId: conversation?.id },
   });
   await track("match_created", a, { origin });
-  return { ...match, compatibility: score.score, conversationId: conversation?.id ?? null };
+  const [me, other] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: a },
+      include: { interests: { include: { interest: true } }, vibes: { include: { vibe: true } }, profile: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: b },
+      include: { interests: { include: { interest: true } }, vibes: { include: { vibe: true } }, profile: true },
+    }),
+  ]);
+  const prompts = Array.isArray(other?.profile?.prompts) ? (other?.profile?.prompts as unknown[]) : [];
+  const firstPrompt = prompts.find((row): row is { question: string; answer: string } => {
+    if (!row || typeof row !== "object") return false;
+    const item = row as { question?: unknown; answer?: unknown };
+    return typeof item.question === "string" && typeof item.answer === "string";
+  });
+  const lines = icebreakers({
+    name: other?.profile?.displayName ?? "there",
+    reasons: [],
+    interests: overlapLabels(me?.interests.map((i) => i.interest.label) ?? [], other?.interests.map((i) => i.interest.label) ?? []),
+    vibes: overlapLabels(me?.vibes.map((v) => v.vibe.label) ?? [], other?.vibes.map((v) => v.vibe.label) ?? []),
+    intention: other?.profile?.datingIntention ?? "DATING",
+    prompt: firstPrompt ?? null,
+  });
+  return {
+    ...match,
+    compatibility: score.score,
+    breakdown: score,
+    conversationId: conversation?.id ?? null,
+    icebreakers: lines,
+  };
+}
+
+function overlapLabels(a: string[], b: string[]) {
+  const set = new Set(b);
+  return a.filter((label) => set.has(label));
 }
 
 export async function conversationWith(userId: string, otherId: string) {

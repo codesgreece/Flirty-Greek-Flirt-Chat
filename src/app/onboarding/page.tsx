@@ -187,10 +187,18 @@ export default function OnboardingPage() {
           )}
           {step === 11 && (
             <div className="mt-6 space-y-3">
-              <p className="text-white/70">Verification is reviewed by FLIRTY. You can start now or later.</p>
-              <FlirtyButton type="button" variant="ghost" onClick={() => api("/api/settings?type=verify", { method: "POST", body: "{}" })}>
-                Submit for verification
-              </FlirtyButton>
+              <p className="text-white/70">Selfie verification is reviewed by FLIRTY. Upload a selfie now or later in Settings.</p>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const form = new FormData();
+                  form.set("file", file);
+                  await api("/api/settings?type=selfie", { method: "POST", body: form });
+                }}
+              />
             </div>
           )}
           {step === 12 && (

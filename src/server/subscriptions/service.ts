@@ -62,8 +62,19 @@ export async function activatePlan(userId: string, code: "FREE" | "PLUS" | "GOLD
 }
 
 export async function activateBoost(userId: string, idempotencyKey?: string) {
-  await requireCapability(userId, CAPABILITIES.BOOST, "GOLD");
-  await consumeUsage(userId, "boosts");
+  const { consumeWallet, activateBoostFromWallet } = await import("@/server/shop/service");
+  const allowed = await prisma.userEntitlement.findUnique({
+    where: { userId_capability: { userId, capability: CAPABILITIES.BOOST } },
+  }).catch(() => null);
+  try {
+    await requireCapability(userId, CAPABILITIES.BOOST, "GOLD");
+    await consumeUsage(userId, "boosts");
+  } catch (error) {
+    if (allowed?.enabled === false) throw error;
+    const used = await consumeWallet(userId, "boosts");
+    if (!used) throw error;
+    return activateBoostFromWallet(userId);
+  }
   if (idempotencyKey) {
     const hit = await prisma.idempotencyKey.findUnique({
       where: { userId_route_key: { userId, route: "boost", key: idempotencyKey } },
@@ -89,8 +100,12 @@ export async function activateBoost(userId: string, idempotencyKey?: string) {
 
 export async function setPassport(
   userId: string,
-  input: { city: string; country: string; latitude: number; longitude: number },
+  input: { city: string; country: string; latitude: number; longitude: number } | null,
 ) {
+  if (input === null) {
+    await prisma.passport.updateMany({ where: { userId }, data: { active: false } });
+    return { active: false };
+  }
   await requireCapability(userId, CAPABILITIES.PASSPORT, "PLUS");
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const row = await prisma.passport.upsert({
