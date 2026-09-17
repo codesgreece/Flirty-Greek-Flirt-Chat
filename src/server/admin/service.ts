@@ -35,7 +35,12 @@ export async function adminSearchUsers(q: string) {
         { profile: { displayName: { contains: q, mode: "insensitive" } } },
       ],
     },
-    include: { profile: true, subscription: { include: { plan: true } }, adminProfile: true },
+    select: {
+      id: true,
+      email: true,
+      status: true,
+      profile: { select: { displayName: true } },
+    },
     take: 40,
   });
 }
