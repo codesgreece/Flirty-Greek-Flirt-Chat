@@ -29,7 +29,7 @@ export function MatchModal({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/80 p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/80 p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
           <div className="relative w-full max-w-md text-center">
             <div className="flex items-center justify-center gap-4">
               <motion.div

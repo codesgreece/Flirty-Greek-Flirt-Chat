@@ -243,7 +243,7 @@ export function DiscoverDeck() {
         />
       ) : !cards.length ? (
         <EmptyState
-          title={empty?.message ?? "That's the room for now"}
+          title={empty?.message ?? "Back in 3 hours"}
           body="Come back later, or open Top Picks and Likes while the deck refills."
           action={
             <div className="flex flex-wrap justify-center gap-2">

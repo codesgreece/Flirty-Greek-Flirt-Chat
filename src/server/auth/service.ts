@@ -98,7 +98,7 @@ export async function loginUser(input: z.infer<typeof loginSchema>, meta: { ip: 
     data: { userId: user.id, email, success: true, ipHash: hashIp(meta.ip) },
   });
   if (!user.emailVerifiedAt) {
-    void prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+    await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
   }
   void audit({ action: "LOGIN_SUCCESS", userId: user.id, ipHash: hashIp(meta.ip) });
   return {
