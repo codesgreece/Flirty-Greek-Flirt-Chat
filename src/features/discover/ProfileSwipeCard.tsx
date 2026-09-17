@@ -96,7 +96,7 @@ export function ProfileSwipeCard({
           >
             NOPE
           </motion.div>
-          <div className="absolute inset-x-0 bottom-0 z-20 p-4 pb-5">
+          <div className="absolute inset-x-0 bottom-0 z-20 p-4 pb-7">
             {card.secondChance ? (
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-200">Second chance</p>
             ) : null}
@@ -153,7 +153,7 @@ function ExpandedProfile({
           <ChevronDown className="h-6 w-6" />
         </button>
       </div>
-      <div className="space-y-5 px-5 py-5">
+      <div className="space-y-5 px-5 pb-12 pt-5">
         <div>
           <h2 className="flex items-center gap-1.5 text-3xl font-extrabold">
             {card.name}, {card.age}

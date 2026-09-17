@@ -7,7 +7,7 @@ import { EmptyState, Skeleton } from "@/components/ui/EmptyState";
 import { useApp } from "@/components/providers/AppProviders";
 import { UpgradeModal } from "@/components/ui/Modal";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui/Avatar";
+import { StoryAvatar } from "@/components/ui/Avatar";
 import { Star } from "lucide-react";
 
 type Like = {
@@ -75,9 +75,7 @@ export default function LikesPage() {
               const photo = other.profile?.photos[0]?.mediumKey ? `/api/media/${other.profile.photos[0].mediumKey}` : null;
               return (
                 <Link key={row.id} href={row.conversation ? `/app/chat/${row.conversation.id}` : "/app/chat"} className="w-[4.5rem] shrink-0 text-center">
-                  <span className="mx-auto block rounded-full bg-gradient-to-br from-amber-300 to-flirty-pink p-[2px]">
-                    <Avatar src={photo} name={other.profile?.displayName ?? "Match"} size={64} />
-                  </span>
+                  <StoryAvatar src={photo} name={other.profile?.displayName ?? "Match"} size={64} />
                   <p className="mt-1 truncate text-xs">{other.profile?.displayName}</p>
                 </Link>
               );

@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function CookieBanner() {
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !localStorage.getItem("flirty-cookie-choice");
-  });
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    setOpen(!localStorage.getItem("flirty-cookie-choice"));
+  }, []);
   if (!open) return null;
   return (
-    <div className="fixed inset-x-4 bottom-28 z-40 rounded-3xl bg-black/80 p-4 text-sm backdrop-blur md:bottom-6 md:max-w-lg">
+    <div className="fixed inset-x-4 top-[max(0.75rem,var(--safe-top))] z-40 rounded-3xl bg-black/85 p-4 text-sm shadow-card backdrop-blur md:bottom-6 md:left-auto md:right-6 md:top-auto md:max-w-lg">
       <p>FLIRTY uses essential cookies to keep you signed in. Analytics cookies stay off unless you allow them.</p>
       <div className="mt-3 flex gap-2">
         <button

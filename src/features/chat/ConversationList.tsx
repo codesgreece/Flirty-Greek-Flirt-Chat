@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { api } from "@/lib/api";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, StoryAvatar } from "@/components/ui/Avatar";
 import { EmptyState, Skeleton } from "@/components/ui/EmptyState";
 import { formatMessageTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -66,9 +66,7 @@ export function ConversationList({ activeId }: { activeId?: string }) {
               const photo = other.profile?.photos[0]?.mediumKey ? `/api/media/${other.profile.photos[0].mediumKey}` : null;
               return (
                 <Link key={row.id} href={row.conversation ? `/app/chat/${row.conversation.id}` : "/app/chat"} className="w-16 shrink-0 text-center">
-                  <span className="mx-auto block rounded-full bg-gradient-to-br from-amber-300 to-flirty-pink p-[2px]">
-                    <Avatar src={photo} name={other.profile?.displayName ?? "Match"} size={56} />
-                  </span>
+                  <StoryAvatar src={photo} name={other.profile?.displayName ?? "Match"} size={56} />
                   <p className="mt-1 truncate text-[11px]">{other.profile?.displayName}</p>
                 </Link>
               );
