@@ -135,7 +135,14 @@ export async function discoverFeed(userId: string, cursor?: string) {
 
   const meOrigin = originFor(me);
   const selfBase = toCompatInput(me, null);
-  const ranked = [];
+  const ranked: Array<{
+    profile: (typeof candidates)[number];
+    age: number;
+    distance: number | null;
+    compat: ReturnType<typeof scoreCompatibility>;
+    rank: number;
+    reasons: string[];
+  }> = [];
   for (const profile of candidates) {
     if (profile.incognito && !liked.has(profile.userId)) continue;
     if (blocked.has(profile.userId)) continue;
@@ -164,7 +171,23 @@ export async function discoverFeed(userId: string, cursor?: string) {
     else if (profile.user.subscription?.plan.code === "GOLD") rank += 4;
     if (priority) rank += 2;
     rank += Math.max(0, 8 - (Date.now() - profile.user.lastActiveAt.getTime()) / 36e5);
-    ranked.push({ profile, age, distance, compat, rank });
+    const overlapInterests = me.interests
+      .map((i) => i.interest.label)
+      .filter((label) => profile.user.interests.some((i) => i.interest.label === label));
+    const overlapVibes = me.vibes
+      .map((v) => v.vibe.label)
+      .filter((label) => profile.user.vibes.some((v) => v.vibe.label === label));
+    const reasons: string[] = [];
+    if (overlapInterests.length) reasons.push(`Same interests: ${overlapInterests.slice(0, 2).join(", ")}`);
+    else if (compat.interests >= 60) reasons.push("Shared interests");
+    if (overlapVibes.length) reasons.push(`Similar vibe: ${overlapVibes[0]}`);
+    else if (compat.vibe >= 60) reasons.push("Similar vibe");
+    if (me.profile.datingIntention === profile.datingIntention) {
+      reasons.push(`Both looking for ${profile.datingIntention.toLowerCase().replaceAll("_", " ")}`);
+    } else if (compat.intent >= 70) reasons.push("Compatible dating intention");
+    if (distance != null && distance <= 8) reasons.push("You're nearby");
+    if (reasons.length < 2 && profile.verificationStatus === "VERIFIED") reasons.push("Verified profile");
+    ranked.push({ profile, age, distance, compat, rank, reasons: reasons.slice(0, 3) });
   }
 
   ranked.sort((a, b) => b.rank - a.rank);
@@ -195,6 +218,7 @@ export async function discoverFeed(userId: string, cursor?: string) {
       lifestyle: row.compat.lifestyle,
       distance: row.compat.distance,
     },
+    reasons: row.reasons,
   }));
 
   return {

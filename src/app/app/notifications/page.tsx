@@ -11,7 +11,7 @@ export default function NotificationsPage() {
   useEffect(() => {
     api<Note[]>("/api/settings").then(setRows);
   }, []);
-  if (!rows.length) return <EmptyState title="You're all caught up" body="New Flirts, matches and messages will appear here." />;
+  if (!rows.length) return <EmptyState title="You're all caught up" body="New likes, matches and messages will appear here." />;
   return (
     <section>
       <h1 className="text-2xl font-bold">Notifications</h1>

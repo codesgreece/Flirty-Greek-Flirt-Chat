@@ -68,6 +68,17 @@ enum MessageKind {
   TEXT
   DIRECT_MESSAGE
   SYSTEM
+  PHOTO
+}
+
+enum CallState {
+  IDLE
+  CALLING
+  RINGING
+  CONNECTED
+  ENDED
+  DECLINED
+  MISSED
 }
 
 enum ReportCategory {
@@ -185,6 +196,8 @@ model User {
   idempotencyKeys    IdempotencyKey[]
   consent            ConsentRecord[]
   dataExports        DataExport[]
+  callsMade          CallSession[]     @relation("CallCaller")
+  callsReceived      CallSession[]     @relation("CallCallee")
 
   @@index([status, lastActiveAt])
   @@index([createdAt])
@@ -393,13 +406,18 @@ model Conversation {
   userBId    String    @db.Uuid
   mutedByA   Boolean   @default(false)
   mutedByB   Boolean   @default(false)
+  typingAAt  DateTime?
+  typingBAt  DateTime?
   lastMessageAt DateTime @default(now())
   createdAt  DateTime  @default(now())
 
-  match    Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  userA    User      @relation("ConversationA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB    User      @relation("ConversationB", fields: [userBId], references: [id], onDelete: Cascade)
-  messages Message[]
+  match      Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userA      User           @relation("ConversationA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB      User           @relation("ConversationB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages   Message[]
+  activities ChatActivity[]
+  streak     ChatStreak?
+  calls      CallSession[]
 
   @@index([userAId, lastMessageAt])
   @@index([userBId, lastMessageAt])
@@ -412,17 +430,74 @@ model Message {
   kind           MessageKind @default(TEXT)
   body           String
   clientId       String?
+  replyToId      String?     @db.Uuid
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  mediaKey       String?
+  mediaThumbKey  String?
+  mediaMime      String?
+  mediaWidth     Int?
+  mediaHeight    Int?
   createdAt      DateTime    @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?
-  readAt         DateTime?
 
   conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
   reactions    MessageReaction[]
+  replyTo      Message?          @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]         @relation("MessageReply")
 
   @@unique([conversationId, clientId])
   @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([replyToId])
+}
+
+model ChatActivity {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @db.Uuid
+  day            DateTime @db.Date
+  userAMessaged  Boolean  @default(false)
+  userBMessaged  Boolean  @default(false)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, day])
+  @@index([conversationId, day])
+}
+
+model ChatStreak {
+  id               String    @id @default(uuid()) @db.Uuid
+  conversationId   String    @unique @db.Uuid
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastQualifiedDay DateTime? @db.Date
+  callUnlockedAt   DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model CallSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @db.Uuid
+  callerId       String    @db.Uuid
+  calleeId       String    @db.Uuid
+  state          CallState @default(CALLING)
+  signaling      Json      @default("{}")
+  startedAt      DateTime  @default(now())
+  ringingAt      DateTime?
+  answeredAt     DateTime?
+  endedAt        DateTime?
+  endReason      String?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  caller       User         @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  callee       User         @relation("CallCallee", fields: [calleeId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, startedAt])
+  @@index([calleeId, state])
+  @@index([callerId, state])
 }
 
 model MessageReaction {

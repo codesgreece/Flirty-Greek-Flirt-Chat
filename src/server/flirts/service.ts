@@ -66,7 +66,7 @@ export async function recordInteraction(input: {
     await notify({
       userId: input.targetId,
       kind: kindMap[input.kind],
-      title: input.kind === "SUPER_LIKE" ? "Someone Super Liked you" : "Someone sent a Flirt",
+      title: input.kind === "SUPER_LIKE" ? "Someone Super Liked you" : "Someone liked you",
       body: "Open FLIRTY to see who it is.",
       payload: { actorId: input.actorId },
     });
@@ -132,7 +132,7 @@ export async function likesYou(userId: string) {
   });
   const already = new Set(outgoing.map((row) => `${row.targetId}:${row.kind}`));
   return rows
-    .filter((row) => !already.has(`${row.actorId}:FLIRT`) && !already.has(`${row.actorId}:PASS`))
+    .filter((row) => !already.has(`${row.actorId}:LIKE`) && !already.has(`${row.actorId}:FLIRT`) && !already.has(`${row.actorId}:PASS`))
     .map((row) => ({
       ...row,
       blurred: !allowed,

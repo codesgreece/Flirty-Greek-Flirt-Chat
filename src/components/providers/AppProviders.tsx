@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ToastHost, type Toast } from "@/components/ui/Toast";
 import { CookieBanner } from "@/components/ui/CookieBanner";
+import { IncomingCallListener } from "@/features/chat/IncomingCallListener";
 import { api } from "@/lib/api";
 
 export type Me = {
@@ -18,10 +19,27 @@ export type Me = {
     bio: string;
     city: string;
     intention: string;
-    photos: { id: string; src: string }[];
+    gender?: string;
+    seeking?: string[];
+    photos: { id: string; src: string; thumb?: string; isPrimary?: boolean; sortOrder?: number }[];
     interests: string[];
+    interestSlugs?: string[];
     vibes: string[];
+    vibeCodes?: string[];
     incognito: boolean;
+    jobTitle?: string;
+    education?: string;
+    languages?: string[];
+    lifestyle?: Record<string, string>;
+  } | null;
+  preference?: {
+    minAge: number;
+    maxAge: number;
+    maxDistanceKm: number;
+    genders: string[];
+    intentions?: string[];
+    verifiedOnly?: boolean;
+    hasPhotosOnly?: boolean;
   } | null;
   entitlements: {
     plan: "FREE" | "PLUS" | "GOLD" | "PLATINUM";
@@ -80,6 +98,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <Ctx.Provider value={value}>
       {children}
       <CookieBanner />
+      {me ? <IncomingCallListener /> : null}
       <ToastHost toasts={toasts} onDismiss={(id) => setToasts((list) => list.filter((t) => t.id !== id))} />
     </Ctx.Provider>
   );

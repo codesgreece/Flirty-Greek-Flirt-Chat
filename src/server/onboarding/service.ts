@@ -35,7 +35,7 @@ export const onboardingSchema = z.object({
   datingIntention: z.nativeEnum(DatingIntention).optional(),
   interests: z.array(z.string()).optional(),
   vibes: z.array(z.nativeEnum(VibeCode)).optional(),
-  bio: z.string().max(400).optional(),
+  bio: z.string().max(500).optional(),
   prompts: z.array(z.object({ question: z.string(), answer: z.string().max(180) })).optional(),
   lifestyle: z.record(z.string()).optional(),
   answers: z.record(z.string()).optional(),

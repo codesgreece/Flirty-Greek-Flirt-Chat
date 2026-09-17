@@ -34,23 +34,33 @@ export async function createMatchIfMutual(a: string, b: string, origin: string) 
     update: {},
     create: { matchId: match.id, userAId: ids.lowUserId, userBId: ids.highUserId },
   });
+  const conversation = await prisma.conversation.findUnique({ where: { matchId: match.id } });
   const score = await getCompatibility(a, b);
   await notify({
     userId: a,
     kind: "MATCH",
     title: "It's a match",
-    body: "You two might have something.",
-    payload: { matchId: match.id, score: score.score },
+    body: "You two liked each other.",
+    payload: { matchId: match.id, score: score.score, conversationId: conversation?.id },
   });
   await notify({
     userId: b,
     kind: "MATCH",
     title: "It's a match",
-    body: "You two might have something.",
-    payload: { matchId: match.id, score: score.score },
+    body: "You two liked each other.",
+    payload: { matchId: match.id, score: score.score, conversationId: conversation?.id },
   });
   await track("match_created", a, { origin });
-  return { ...match, compatibility: score.score };
+  return { ...match, compatibility: score.score, conversationId: conversation?.id ?? null };
+}
+
+export async function conversationWith(userId: string, otherId: string) {
+  const ids = ordered(userId, otherId);
+  const match = await prisma.match.findFirst({
+    where: { ...ids, active: true },
+    include: { conversation: true },
+  });
+  return match?.conversation ?? null;
 }
 
 export async function unmatch(userId: string, matchId: string) {

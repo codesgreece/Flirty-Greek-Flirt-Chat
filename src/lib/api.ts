@@ -11,6 +11,7 @@ export class ApiError extends Error {
     message: string,
     public code: string,
     public status: number,
+    public extra?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -23,7 +24,7 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
     headers.set("content-type", "application/json");
   }
   const res = await fetch(path, { ...init, headers, credentials: "include" });
-  const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
-  if (!res.ok) throw new ApiError(data.error || "Something went wrong.", data.code || "ERROR", res.status);
+  const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string; extra?: Record<string, unknown> };
+  if (!res.ok) throw new ApiError(data.error || "Something went wrong.", data.code || "ERROR", res.status, data.extra);
   return data as T;
 }

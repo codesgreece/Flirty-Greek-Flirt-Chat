@@ -59,6 +59,37 @@ export async function readStoredFile(key: string) {
   }
 }
 
+export async function writeStoredFile(key: string, buffer: Buffer) {
+  if (key.includes("..") || key.startsWith("/")) throw new AppError("INVALID", "Invalid media path.", 400);
+  const full = path.join(storageRoot(), key);
+  await mkdir(path.dirname(full), { recursive: true });
+  await writeFile(full, buffer);
+}
+
+export async function saveChatImage(conversationId: string, file: File) {
+  if (!ALLOWED.has(file.type)) throw new AppError("INVALID", "Use a JPEG, PNG or WebP photo.", 400);
+  if (file.size > MAX_BYTES) throw new AppError("INVALID", "Photos must be under 8MB.", 400);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const meta = await sharp(buffer).rotate().metadata();
+  if (!meta.width || !meta.height) throw new AppError("INVALID", "That file is not a valid image.", 400);
+  if (meta.width < 32 || meta.height < 32) throw new AppError("INVALID", "Image is too small.", 400);
+  const id = randomBytes(16).toString("hex");
+  const largeKey = `chat/${conversationId}/${id}-lg.webp`;
+  const thumbKey = `chat/${conversationId}/${id}-th.webp`;
+  await mkdir(path.join(storageRoot(), "chat", conversationId), { recursive: true });
+  await Promise.all([
+    sharp(buffer).rotate().resize(1400, 1400, { fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toFile(path.join(storageRoot(), largeKey)),
+    sharp(buffer).rotate().resize(480, 480, { fit: "inside", withoutEnlargement: true }).webp({ quality: 75 }).toFile(path.join(storageRoot(), thumbKey)),
+  ]);
+  return {
+    mediaKey: largeKey,
+    mediaThumbKey: thumbKey,
+    mediaMime: "image/webp",
+    mediaWidth: meta.width,
+    mediaHeight: meta.height,
+  };
+}
+
 export async function writePublicAvatarPng(fileName: string, png: Buffer) {
   const dest = path.join(process.cwd(), "public", "avatars", fileName);
   await mkdir(path.dirname(dest), { recursive: true });

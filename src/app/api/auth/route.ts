@@ -93,15 +93,28 @@ export async function GET() {
             photos: user.profile.photos.map((p) => ({
               id: p.id,
               src: `/api/media/${p.mediumKey}`,
+              thumb: `/api/media/${p.thumbKey}`,
+              isPrimary: p.isPrimary,
+              sortOrder: p.sortOrder,
               status: p.status,
             })),
             interests: user.interests.map((i) => i.interest.label),
+            interestSlugs: user.interests.map((i) => i.interest.slug),
             vibes: user.vibes.map((v) => v.vibe.label),
+            vibeCodes: user.vibes.map((v) => v.vibe.code),
             prompts: user.profile.prompts,
             incognito: user.profile.incognito,
             discoverable: user.profile.discoverable,
+            jobTitle: user.profile.jobTitle,
+            education: user.profile.education,
+            languages: user.profile.languages,
+            lifestyle:
+              user.profile.lifestyle && typeof user.profile.lifestyle === "object" && !Array.isArray(user.profile.lifestyle)
+                ? (user.profile.lifestyle as Record<string, string>)
+                : {},
           }
         : null,
+      preference: user.preference,
       entitlements,
       usage,
       boost: user.boosts[0] ?? null,

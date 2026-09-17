@@ -10,6 +10,7 @@ import { MatchModal } from "@/features/discover/MatchModal";
 import { UpgradeModal } from "@/components/ui/Modal";
 import { useRouter } from "next/navigation";
 import { motionTokens } from "@/lib/motion";
+import { formatIntention } from "@/lib/format";
 
 export type DiscoverCard = {
   userId: string;
@@ -25,6 +26,7 @@ export type DiscoverCard = {
   vibes: string[];
   photos: { id: string; src: string; thumb: string }[];
   compatibility: { score: number; interests: number; vibe: number; intent: number; lifestyle: number; distance: number };
+  reasons?: string[];
 };
 
 export function DiscoverDeck() {
@@ -32,7 +34,13 @@ export function DiscoverDeck() {
   const router = useRouter();
   const [cards, setCards] = useState<DiscoverCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [match, setMatch] = useState<{ name: string; score: number; photo?: string } | null>(null);
+  const [match, setMatch] = useState<{
+    name: string;
+    score: number;
+    photo?: string;
+    conversationId?: string | null;
+    myPhoto?: string;
+  } | null>(null);
   const [upgrade, setUpgrade] = useState<{ title: string; body: string; required: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,23 +54,27 @@ export function DiscoverDeck() {
     load().catch(() => setLoading(false));
   }, [load]);
 
-  async function act(kind: "FLIRT" | "PASS" | "SUPER_LIKE" | "LIKE", targetId: string) {
+  async function act(kind: "PASS" | "SUPER_LIKE" | "LIKE", targetId: string) {
     if (busy) return;
     setBusy(true);
     const leaving = cards[0];
     setCards((list) => list.slice(1));
     try {
-      const result = await api<{ match: { compatibility?: number } | null }>("/api/flirts", {
+      const result = await api<{
+        match: { compatibility?: number; conversationId?: string } | null;
+      }>("/api/flirts", {
         method: "POST",
         body: JSON.stringify({ targetId, kind, idempotencyKey: crypto.randomUUID() }),
       });
-      if (kind === "FLIRT") toast("Flirt sent ❤️");
+      if (kind === "LIKE") toast("Liked ❤️");
       if (kind === "SUPER_LIKE") toast("Super Like sent 💫");
       if (result.match && leaving) {
         setMatch({
           name: leaving.name,
           score: result.match.compatibility ?? leaving.compatibility.score,
           photo: leaving.photos[0]?.src,
+          conversationId: result.match.conversationId,
+          myPhoto: me?.profile?.photos[0]?.src,
         });
       }
       void refresh();
@@ -71,12 +83,12 @@ export function DiscoverDeck() {
       if (leaving) setCards((list) => [leaving, ...list]);
       if (error instanceof ApiError && (error.code === "UPGRADE_REQUIRED" || error.code === "LIMIT_REACHED")) {
         setUpgrade({
-          title: "You found something worth sending.",
+          title: "You found someone worth sending.",
           body: error.message,
           required: me?.entitlements.plan === "FREE" ? "PLUS" : "GOLD",
         });
       } else {
-        toast("Connection lost. Trying again…");
+        toast("Couldn't send that. Try again.");
       }
     } finally {
       setBusy(false);
@@ -96,7 +108,7 @@ export function DiscoverDeck() {
   if (loading) {
     return (
       <div className="mx-auto max-w-md space-y-4">
-        <Skeleton className="h-[520px]" />
+        <Skeleton className="h-[560px] rounded-[2rem]" />
         <div className="flex justify-center gap-4">
           <Skeleton className="h-14 w-14 rounded-full" />
           <Skeleton className="h-16 w-16 rounded-full" />
@@ -110,23 +122,28 @@ export function DiscoverDeck() {
     return (
       <EmptyState
         title="That's the room for now"
-        body="Your next connection might be one Flirt away. Check again soon."
-        action={<button className="rounded-full bg-white/10 px-4 py-2" onClick={() => load()}>Refresh</button>}
+        body="Your next connection might be one Like away. Check again soon."
+        action={
+          <button className="rounded-full bg-white/10 px-4 py-2" onClick={() => load()}>
+            Refresh
+          </button>
+        }
       />
     );
   }
 
   return (
     <div className="mx-auto max-w-md">
-      <div className="relative h-[560px]">
+      <div className="relative h-[min(72dvh,620px)]">
         {cards.slice(0, 3).map((card, index) => (
           <ProfileSwipeCard
             key={card.userId}
             card={card}
             index={index}
             active={index === 0}
-            onFlirt={() => act("FLIRT", card.userId)}
+            onLike={() => act("LIKE", card.userId)}
             onPass={() => act("PASS", card.userId)}
+            onOpen={() => router.push(`/app/u/${card.userId}`)}
           />
         ))}
       </div>
@@ -134,14 +151,18 @@ export function DiscoverDeck() {
         <button aria-label="Rewind" className="grid h-12 w-12 place-items-center rounded-full bg-white/10" onClick={rewind}>
           <RotateCcw className="h-5 w-5" />
         </button>
-        <button aria-label="Pass" className="grid h-14 w-14 place-items-center rounded-full bg-white/10" onClick={() => cards[0] && act("PASS", cards[0].userId)}>
+        <button
+          aria-label="Pass"
+          className="grid h-14 w-14 place-items-center rounded-full bg-white/10"
+          onClick={() => cards[0] && act("PASS", cards[0].userId)}
+        >
           <X className="h-6 w-6" />
         </button>
         <motion.button
-          aria-label="Flirt"
+          aria-label="Like"
           whileTap={{ scale: 0.9 }}
           className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-flirty-pink to-indigo-500 text-xl shadow-glow"
-          onClick={() => cards[0] && act("FLIRT", cards[0].userId)}
+          onClick={() => cards[0] && act("LIKE", cards[0].userId)}
         >
           ♥
         </motion.button>
@@ -152,43 +173,18 @@ export function DiscoverDeck() {
         >
           <Star className="h-6 w-6" />
         </button>
-        <button
-          aria-label="Direct Message"
-          className="grid h-12 w-12 place-items-center rounded-full bg-amber-300/20 text-amber-100"
-          onClick={async () => {
-            const card = cards[0];
-            if (!card) return;
-            const body = window.prompt("Send a message with your Flirt");
-            if (!body) return;
-            try {
-              await api("/api/chat?type=dm", {
-                method: "POST",
-                body: JSON.stringify({ recipientId: card.userId, body, idempotencyKey: crypto.randomUUID() }),
-              });
-              toast("Direct Message sent");
-            } catch (error) {
-              if (error instanceof ApiError) {
-                setUpgrade({
-                  title: "You found something worth sending.",
-                  body: "Direct Messages are available with FLIRTY PLUS.",
-                  required: "PLUS",
-                });
-              }
-            }
-          }}
-        >
-          ✉
-        </button>
       </div>
       <MatchModal
         open={Boolean(match)}
         name={match?.name ?? ""}
         score={match?.score ?? 0}
         photo={match?.photo}
+        myPhoto={match?.myPhoto}
         onKeep={() => setMatch(null)}
         onMessage={() => {
+          const id = match?.conversationId;
           setMatch(null);
-          router.push("/app/chat");
+          router.push(id ? `/app/chat/${id}` : "/app/chat");
         }}
       />
       <UpgradeModal
@@ -208,21 +204,22 @@ function ProfileSwipeCard({
   card,
   index,
   active,
-  onFlirt,
+  onLike,
   onPass,
+  onOpen,
 }: {
   card: DiscoverCard;
   index: number;
   active: boolean;
-  onFlirt: () => void;
+  onLike: () => void;
   onPass: () => void;
+  onOpen: () => void;
 }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-200, 200], [-10, 10]);
-  const flirtOp = useTransform(x, [40, 140], [0, 1]);
+  const likeOp = useTransform(x, [40, 140], [0, 1]);
   const passOp = useTransform(x, [-140, -40], [1, 0]);
   const photo = card.photos[0]?.src ?? "/avatars/fallback.svg";
-  const prompts = Array.isArray(card.prompts) ? (card.prompts as { question: string; answer: string }[]) : [];
 
   return (
     <motion.article
@@ -239,25 +236,27 @@ function ProfileSwipeCard({
       dragElastic={0.9}
       transition={motionTokens.cardSpring}
       onDragEnd={(_, info) => {
-        if (info.offset.x > 120 || info.velocity.x > 700) onFlirt();
+        if (info.offset.x > 120 || info.velocity.x > 700) onLike();
         else if (info.offset.x < -120 || info.velocity.x < -700) onPass();
       }}
+      onDoubleClick={onOpen}
     >
-      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${photo})` }} />
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-      <motion.div style={{ opacity: flirtOp }} className="absolute left-5 top-6 rounded-full border-2 border-flirty-pink px-3 py-1 text-sm font-bold text-flirty-pink">
-        FLIRT
+      <div className="pointer-events-none absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${photo})` }} />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
+      <motion.div style={{ opacity: likeOp }} className="pointer-events-none absolute left-5 top-6 rounded-full border-2 border-flirty-pink px-3 py-1 text-sm font-bold text-flirty-pink">
+        LIKE
       </motion.div>
-      <motion.div style={{ opacity: passOp }} className="absolute right-5 top-6 rounded-full border-2 border-white/50 px-3 py-1 text-sm font-bold">
+      <motion.div style={{ opacity: passOp }} className="pointer-events-none absolute right-5 top-6 rounded-full border-2 border-white/50 px-3 py-1 text-sm font-bold">
         PASS
       </motion.div>
       <div className="absolute inset-x-0 bottom-0 p-5">
-        <p className="text-xs font-semibold tracking-wide text-flirty-pink">{card.compatibility.score}% FLIRTY MATCH</p>
+        <p className="text-xs font-semibold tracking-wide text-flirty-pink">{card.compatibility.score}% Vibe Match</p>
         <h2 className="text-3xl font-bold">
           {card.name}, {card.age} {card.verified ? <span className="text-indigo-300">✓</span> : null}
         </h2>
         <p className="text-sm text-white/70">
-          {card.distanceLabel ?? card.city} · {card.intention.toLowerCase()} · {card.vibes[0]}
+          {card.distanceLabel ?? card.city} · {formatIntention(card.intention)}
+          {card.vibes[0] ? ` · ${card.vibes[0]}` : ""}
         </p>
         <p className="mt-3 line-clamp-2 text-sm text-white/80">{card.bio}</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -267,14 +266,24 @@ function ProfileSwipeCard({
             </span>
           ))}
         </div>
-        <div className="mt-3 grid grid-cols-5 gap-1 text-[10px] text-white/60">
-          <span>❤️ {card.compatibility.interests}</span>
-          <span>✨ {card.compatibility.vibe}</span>
-          <span>🎯 {card.compatibility.intent}</span>
-          <span>🌙 {card.compatibility.lifestyle}</span>
-          <span>📍 {card.compatibility.distance}</span>
-        </div>
-        {prompts[0]?.answer ? <p className="mt-3 text-sm italic text-white/70">“{prompts[0].answer}”</p> : null}
+        {card.reasons?.length ? (
+          <div className="mt-3 space-y-1 text-xs text-white/75">
+            <p className="font-semibold text-white/90">Why you might match</p>
+            {card.reasons.slice(0, 3).map((reason) => (
+              <p key={reason}>✨ {reason}</p>
+            ))}
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="pointer-events-auto mt-3 rounded-full bg-white/10 px-3 py-1 text-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+        >
+          View profile
+        </button>
       </div>
     </motion.article>
   );

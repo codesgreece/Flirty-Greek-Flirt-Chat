@@ -37,7 +37,7 @@ export function attachRealtime(httpServer: HttpServer) {
       socket.join(`convo:${conversationId}`);
     });
 
-    socket.on("message:send", async (payload: { conversationId: string; body: string; clientId: string }) => {
+    socket.on("message:send", async (payload: { conversationId: string; body: string; clientId: string; replyToId?: string }) => {
       try {
         const message = await sendChatMessage({ senderId: userId, ...payload });
         io.to(`convo:${payload.conversationId}`).emit("message:new", message);

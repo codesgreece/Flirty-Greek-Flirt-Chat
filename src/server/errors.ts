@@ -19,9 +19,12 @@ export function isDatabaseError(error: unknown) {
   );
 }
 
-export function publicErrorMessage(error: unknown): { status: number; body: { error: string; code: string } } {
+export function publicErrorMessage(error: unknown): {
+  status: number;
+  body: { error: string; code: string; extra?: Record<string, unknown> };
+} {
   if (error instanceof AppError) {
-    return { status: error.status, body: { error: error.message, code: error.code } };
+    return { status: error.status, body: { error: error.message, code: error.code, extra: error.extra } };
   }
   if (isDatabaseError(error)) {
     return {
