@@ -9,6 +9,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<Array<{ id: string; email: string; status: string; profile: { displayName: string } | null }>>([]);
   const [reports, setReports] = useState<Array<{ id: string; category: string; status: string }>>([]);
   const [q, setQ] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const load = useCallback(async () => {
     setOverview(await api("/api/admin?section=overview"));
@@ -19,9 +20,25 @@ export default function AdminPage() {
     load().catch(() => undefined);
   }, [load]);
 
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await api("/api/auth?action=logout", { method: "POST", body: "{}" });
+    } catch {
+      /* still leave the session on the client */
+    }
+    window.location.assign("/auth?mode=login");
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-5 py-10">
-      <h1 className="text-3xl font-bold">Control center</h1>
+      <header className="flex items-start justify-between gap-4">
+        <h1 className="text-3xl font-bold">Control center</h1>
+        <FlirtyButton type="button" variant="ghost" loading={loggingOut} disabled={loggingOut} onClick={logout}>
+          Log out
+        </FlirtyButton>
+      </header>
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {overview &&
           Object.entries(overview).map(([k, v]) => (
